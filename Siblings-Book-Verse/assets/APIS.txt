@@ -1,0 +1,197 @@
+BookVerse - every API, what it answers, and what happens when it does not
+========================================================================
+
+Five sources. Two need a credential, three need nothing. Everything is
+normalised into one book shape in js/books/api.js, and nothing downstream knows
+which one answered.
+
+
+1. GOOGLE BOOKS
+---------------
+Base   https://www.googleapis.com/books/v1
+Key    none
+Limit  per-IP, undocumented. A 429 is normal under load.
+
+  /volumes?q=...              Every text search. Bare phrases, intitle:,
+                              inauthor:, subject:, and isbn:.
+  /volumes/{id}               One volume in full, for the modal.
+
+Used for  search, descriptions, page counts, publishers, preview links.
+Why       its relevance ranking on a bare phrase is far better than Open
+          Library's, and it is the only one of the two that reliably carries a
+          description.
+
+COUNTRY IS NOT OPTIONAL. Google answers 403 "unknown location" to browser
+requests from several countries, India among them, unless the query carries
+country=XX. Every search fails without it and nothing in the response explains
+why. GOOGLE_BOOKS_COUNTRY in js/config.js.
+
+Every Google call in the search path is allowed to fail. Only the failure of
+BOTH indexes is an error, and then the real message is shown rather than a
+friendly nothing - "403, unknown location" is the difference between a bug and
+a one-line config change.
+
+
+2. OPEN LIBRARY
+---------------
+Base   https://openlibrary.org
+Key    none
+
+  /trending/{period}.json     The home feed. daily | weekly | monthly | yearly.
+                              Google has no popularity signal of any kind.
+                              ASK FOR fields BY NAME. Left to itself this one
+                              answers with a short default set carrying no isbn,
+                              so a trending card cannot tell it is another
+                              printing of something already read while the same
+                              book found through search.json can.
+                              A rejected query parameter here is a 400, not an
+                              ignored argument, so the call retries bare before
+                              giving up. If it still fails the feed falls back to
+                              search.json sorted by readinglog, then to the
+                              subjects index, then to Google. The home page is
+                              never blank, the note on screen says which one
+                              answered, and every failure on the way is printed
+                              with it - a silent fallback is a bug nobody can
+                              report.
+  /subjects/{slug}.json       The subject chips. A real index, not a text
+                              search for the subject's name.
+  /search.json                Every refinement - sort, year range, language,
+                              ebook_access - and the fallback when Google
+                              returns nothing. It holds editions Google does
+                              not, especially older and regional ones. Its docs
+                              also carry a work's ENTIRE ISBN list, which is
+                              what lets a shelf recognise a translated title.
+  /works/{id}.json            Description and subjects for the modal.
+  /works/{id}/editions.json   Every printing. See "picking an edition" below.
+
+  /api/books?bibkeys=ISBN:... ONE edition, the one carrying that exact ISBN,
+    &format=json&jscmd=data   with its own publisher, page count and cover.
+  /isbn/{isbn}.json           The raw edition record. The only place the
+                              LANGUAGE and the parent work key come from.
+
+The last two are the ISBN lookup. They are what tells 9780062315007 (HarperOne,
+English, 2014) apart from 9788845269110 (Vallardi, Italian) - two ISBNs that a
+text index will happily collapse into "some book called The Alchemist".
+
+
+3. OPEN LIBRARY COVERS
+----------------------
+Base   https://covers.openlibrary.org
+Key    none
+
+  /b/isbn/{isbn}-{S,M,L}.jpg
+  /b/id/{cover_id}-{S,M,L}.jpg
+
+Google's thumbnails are 128px wide and show their pixels in a modal, so where a
+book has an ISBN the larger Open Library cover is tried first.
+
+?default=false matters. Without it a missing cover returns a blank 1x1 image
+that would never fire the <img> error handler, so the fallback would never run.
+It is stripped again on the way INTO the sheet, where a URL that 404s on purpose
+is just a dead link.
+
+
+4. THE SHEET
+------------
+  Apps Script /exec ?action=read   Both tabs in ONE request, so a cold start is
+                                   paid once.
+  Apps Script /exec  POST          Every write. text/plain, because Apps Script
+                                   cannot answer a CORS preflight.
+  Published CSV                    Read-only fallback. Goes through Google's
+                                   few-minute cache, so a fresh write can be
+                                   invisible there - which is why the bridge is
+                                   the primary route and not the other way
+                                   round.
+
+
+Which one runs, and why
+-----------------------
+    a phrase, a title, an author   Google first, Open Library if empty
+    "best <something>"             Open Library subjects, sorted by rating. A
+                                   superlative asks for a shelf, and Google
+                                   answers it with novels carrying those words
+    the Refine panel               NOTHING. It shortlists the cards already on
+                                   screen; the search bar is where a new
+                                   question goes
+    a subject chip                 Open Library subjects, Google if the slug is
+                                   unknown
+    trending                       Open Library only
+    an ISBN                        Open Library editions AND Google, in
+                                   parallel, both verified against the number.
+                                   Never a text index.
+    the modal's missing fields     whichever source did NOT answer first
+    "More by"                      Google, then Open Library search
+    "Readers also shelve"          Google, then Open Library subjects, then
+                                   Open Library search
+
+
+Picking an edition
+------------------
+A work carries dozens of printings in a dozen languages and entries[0] is
+whichever was catalogued first. Taking it blindly is how a book ends up showing
+a Bulgarian publisher beside an English title. pickEdition() in js/books/api.js
+prefers, in order: the edition whose ISBN we already hold, then a complete
+English one with a cover and a page count, then any with an ISBN at all.
+
+
+Every edition of one book
+-------------------------
+There is no arithmetic from one ISBN to the rest. Editions are grouped under a
+WORK, so the work has to be resolved first:
+
+    /isbn/{isbn}.json           -> works[0].key
+    /works/{key}/editions.json  -> every printing, each with its own ISBNs
+
+otherEditions() in js/books/discover.js does both and returns each printing with
+its publisher, language, year and ISBNs. The modal does not print that list -
+ninety rows of publishers buried the one line worth reading. It uses it to ask
+the sheet whether ANY edition of the book is already on a shelf, which is how a
+Portuguese paperback recognises the English hardback somebody has read, and to
+settle the modal's own flags from the whole work rather than from one number.
+
+
+Reading it now
+--------------
+Neither Open Library nor Google hosts a file. Where a scan exists it lives at
+the Internet Archive under the edition's `ocaid`:
+
+    https://archive.org/details/{ocaid}                Read or borrow
+    https://archive.org/download/{ocaid}/{ocaid}.pdf   PDF, public scans only
+
+ebook_access tells the two apart. "public" is out of copyright and downloadable;
+anything else is lending-only, and offering a PDF link for it would be a broken
+promise. Books still in copyright have no scan at all and get no button.
+
+
+The Other Versions column
+-------------------------
+assets/apps_script/OtherVersions.gs writes every known printing into a cell, one
+per line, ISBN first. The site parses ONLY the leading ISBN off each line, so the
+rest is free to be reformatted. "None" and any line whose first token is not an
+ISBN both yield nothing.
+
+Three states follow from it, and they are deliberately not merged:
+
+    green   this exact edition is on the shelf
+    violet  this exact edition is on a readlist
+    yellow  a DIFFERENT printing is on a shelf or a readlist
+
+Matching it needs BOTH halves. The sheet's side is the versions cell. The API's
+side is editionIsbns - the whole ISBN array off a search doc, not the one number
+that happened to sort first. Keeping only that one is why the column looked
+broken: a trending card for O Alquimista showed a Diogenes German printing, the
+sheet listed the HarperOne English one, and nothing ever compared the two.
+
+The third is a weaker claim than the first and reads as one. A book that is read
+is never also flagged as a version of itself.
+
+Marking a book read from the site fills both columns on the way in, so a new row
+never waits for the script to be run again by hand.
+
+
+Verifying a lookup
+------------------
+carriesIsbn() in js/data/identity.js. Any book offered as the answer to an ISBN
+query must actually carry that number, in either its 10- or 13-digit form.
+Anything else is thrown away, including when it is the only thing that came
+back. No result is a real answer.

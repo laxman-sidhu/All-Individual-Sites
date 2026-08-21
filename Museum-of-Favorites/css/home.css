@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Museum of Favorites — Homepage
+   Hero, about section.
+   ========================================================================== */
+
+.hero {
+  position: relative;
+  min-height: calc(100vh - var(--nav-height)); /* fallback */
+  min-height: calc(100svh - var(--nav-height));
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding-block: clamp(3rem, 8vw, 6rem);
+}
+
+.hero__inner {
+  max-width: 880px;
+  margin-inline: auto;
+}
+
+.hero__ticket {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0.55rem 1.2rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px dashed var(--lavender);
+  box-shadow: var(--shadow-soft);
+  animation: bob-badge 7s ease-in-out infinite;
+}
+
+.hero__title {
+  font-size: var(--text-hero);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-top: 1.4rem;
+  background: var(--grad-hero-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.1em; /* keep descenders inside the clip */
+}
+
+.hero__subtitle {
+  max-width: 62ch;
+  margin: 1.3rem auto 0;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  color: var(--ink-soft);
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.9rem;
+  margin-top: 2.4rem;
+}
+
+.hero__scroll-hint {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+  animation: gentle-float 3.2s ease-in-out infinite;
+}
+
+

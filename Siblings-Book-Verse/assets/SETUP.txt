@@ -1,0 +1,276 @@
+BookVerse — setup
+=================
+
+Everything below happens once. After that the site runs itself.
+
+
+1. The spreadsheet
+------------------
+
+One workbook, two tabs. The tab NAMES must match what Code.gs expects.
+
+    All Read Books   Title | ISBN | Author | Genre | Thumbnail Url | Read by Who ? | Summary
+    Readlist         Title | ISBN | Author | Genre | Thumbnail Url | Summary | Readlist of Who ?
+
+Row 1 must be the header row. Columns are matched by header NAME, never by
+position, so you can reorder them freely and an unnamed spacer column is
+ignored.
+
+There are no favourites. Three people share one shelf and their favourites
+would clash, so the column does not exist and neither does the button.
+
+ISBN is the best thing on either tab. It is the only true identifier a book
+has, and where a row carries one it settles matching outright: same ISBN is the
+same book whatever the titles say, and a different ISBN is a different book
+whatever the titles say. The site fills it in on everything it adds. Rows
+without one still match on title and author, so filling the column in is
+worth doing but never urgent.
+
+ISBN-10 and ISBN-13 are both accepted and both understood. 0062315005 and
+9780062315007 are the same book; the site and the bridge both convert to the
+13-digit form before comparing anything, so a row typed in either way matches.
+Anything that is not a valid ISBN — "n/a", a partial number — is read as no
+ISBN at all rather than as a wrong one.
+
+One further OPTIONAL column:
+
+    Book Id     the site fills this in on every book it adds. Useful only for
+                books with no ISBN at all.
+
+You can also add Year and Date Read. The site writes both when the columns
+exist and skips them when they do not.
+
+Renaming a header is safe as long as the new spelling is already an alias. The
+title column accepts Title, Book, Book Name or Name; the cover column accepts
+Thumbnail Url, Thumbnail, Link, Cover or Image; the reader column accepts Read
+by Who ?, Readlist of Who ?, Read By, Reader, Who or Added By. The full lists
+are COLUMN_ALIASES in Code.gs and the alias tables in js/data/sheets.js — and
+both sides have to carry the spelling, which assets/tests/bridge.test.mjs
+checks. A header that names nothing on those lists is the one thing that breaks
+a column, and it fails loudly rather than writing to the wrong place.
+
+Delete the old column when you rename one. If a tab ends up with two columns
+naming the same field, the FIRST wins and the second is ignored, on both sides.
+
+
+2. The gids
+-----------
+
+Open each tab and read the number after gid= in the address bar. Put them in
+js/config.js as READ_GID and READLIST_GID. SHEET_ID is the long string between
+/d/ and /edit in the same address.
+
+These are already filled in for the existing workbook.
+
+
+3. The Apps Script bridge
+-------------------------
+
+This is what lets the site WRITE. Without it the site is read-only: the buttons
+say so rather than failing silently.
+
+  a. In the spreadsheet: Extensions > Apps Script.
+  b. Delete whatever is there and paste assets/apps_script/Code.gs.
+  c. Change SECRET at the top to a long random string.
+  d. Save. Then Deploy > New deployment > Web app.
+       Execute as:  Me
+       Who has access:  Anyone
+  e. Authorise it. Google will warn that the app is not verified — that is
+     because it is yours and unpublished. Advanced > Go to (project).
+  f. Copy the /exec URL.
+
+Then in js/config.js:
+
+    APPS_SCRIPT_URL   = the /exec URL from step (f)          [already filled in]
+    APPS_SCRIPT_TOKEN = the same string as SECRET             [already filled in]
+    OWNER_PASSWORD    = what you type to unlock the buttons   [already filled in]
+
+All three are set. SECRET in Code.gs and APPS_SCRIPT_TOKEN in js/config.js are
+both "this-is-a-long-random-string-for-bookverse" and are compared character for
+character on every write, so if you change one, change the other.
+bridge.test.mjs fails if they ever drift apart.
+
+Leave OWNER_PASSWORD empty and the site stays read-only for everyone.
+
+Before pointing the site at it, select testSetup in the Apps Script toolbar and
+press Run. It reports what it found and changes nothing:
+
+    Read rows / Readlist rows      how many it can see
+    Columns found                  every field it managed to map
+    MISSING COLUMN: ...            a header it could not find
+
+There is a second function worth knowing about. cleanDuplicates(), run the same
+way, removes a second row for a book the same person already has. It logs what
+it took and changes nothing else. Only needed once, for duplicates that predate
+the identity check — the bridge refuses to create new ones. File > Version
+history undoes it if it takes something you wanted.
+
+
+4. Publishing
+-------------
+
+Push the folder to a GitHub repository, then Settings > Pages > Deploy from a
+branch > main > / (root).
+
+ES modules will not load over file://, so opening index.html by double-clicking
+it will not work. To run it locally, serve the folder:
+
+    python3 -m http.server 8000
+
+then open http://localhost:8000.
+
+
+5. The readers
+--------------
+
+js/config.js holds the READERS list. The `name` must match the "Read by Who ?"
+cell EXACTLY — it is what gets written and what gets matched. The `photo` is
+the picture that appears on the home page, on the cover of every book they have
+read, and in the "who finished it?" picker.
+
+To add a fourth reader, add an entry and drop a square photo in
+assets/images/. Nothing else needs changing.
+
+
+6. The book APIs
+----------------
+
+Two, both free, neither needs a key or an account:
+
+    Google Books      search, descriptions, page counts, publishers, ISBNs
+    Open Library      trending, subject browsing, covers, ratings, editions
+
+Google Books is rate limited per IP address rather than per key. Heavy use from
+one network can get a temporary 429; the site retries with a backoff and falls
+back to Open Library, so a search still returns something.
+
+GOOGLE_BOOKS_COUNTRY is set to "IN" and is NOT decoration. Google Books answers
+403 "unknown location" to browser requests from several countries, India among
+them, unless the country is stated outright in the query. Without it every
+search fails and nothing explains why. Change the two letters if the site is
+ever used from somewhere else, or leave it — it is a hint, not a restriction.
+
+The site works with no API key at all, but Google Books is worth one.
+
+Without a key, every anonymous browser on the internet shares a single Google
+quota, and it runs out. "HTTP 429: Quota exceeded for quota metric 'Queries'"
+is what running out of somebody else's allowance looks like — nothing is wrong
+with this site when it happens, and there is nothing to do but wait.
+
+A free key gives it its own 1,000 searches a day:
+
+  1. console.cloud.google.com > new project
+  2. APIs & Services > Library > "Books API" > Enable
+  3. Credentials > Create credentials > API key
+  4. Restrict it to your domain, then add it to GOOGLE_BOOKS_KEYS
+     in js/config.js:
+
+       export const GOOGLE_BOOKS_KEYS = ["AIza...."];
+
+No billing details are needed. Open Library needs nothing either way.
+
+
+MORE THAN ONE KEY
+-----------------
+The quota is counted per Google Cloud PROJECT, not per account, so a second
+project has its own allowance and the list takes as many as you like:
+
+  export const GOOGLE_BOOKS_KEYS = ["AIza...one", "AIza...two"];
+
+The site uses the first until Google answers "quota exceeded", then moves to the
+next and stays there. Only a quota refusal advances it — a 403 for the wrong
+country would otherwise burn every key and report the last one's error instead
+of the real fault.
+
+Two things to know before doing this.
+
+Ask for more quota first. Console > APIs & Services > Books API > Quotas has a
+request form, it is free, and a raised limit on one project is simpler than
+juggling three. Spreading load across projects to get around a per-project limit
+is the kind of thing Google's terms discourage, and keys in a public page can be
+revoked.
+
+And every key in js/config.js is visible to anyone who opens the page. Restrict
+each one to your domain under Credentials > API key > Website restrictions, or
+you are handing your allowance to whoever finds it.
+
+
+7. What the keys expose
+-----------------------
+
+Everything in js/config.js is public. It is a static site, so anything the
+browser needs, a visitor can read. That is a deliberate choice for a personal
+project, and here is exactly what it means:
+
+    SHEET_ID          the sheet is readable anyway if it is shared by link
+    OWNER_PASSWORD    stops an accidental click and a casual visitor; it is a
+                      convenience, NOT a security boundary
+    APPS_SCRIPT_TOKEN this is the real one. Anyone who reads it can POST to
+                      your bridge and change the sheet.
+
+If that ever matters, the fix is to stop trusting the browser: move the token
+behind something that can keep a secret (a Cloudflare Worker or similar
+proxying the bridge), or set the deployment's access to a Google account list
+instead of "Anyone". Until then, File > Version history is the safety net —
+every write is undoable.
+
+
+8. When something goes wrong
+----------------------------
+
+The buttons do nothing, or say the site is read-only.
+    APPS_SCRIPT_URL or OWNER_PASSWORD is empty in js/config.js.
+
+A write says "Not authorised".
+    APPS_SCRIPT_TOKEN and SECRET do not match. They are case sensitive.
+
+A book saves but its Thumbnail Url or Summary cell is empty.
+    Two different causes, both now fixed, both needing you to act:
+      1. Re-paste Code.gs and REDEPLOY. Older versions did not know the header
+         "Thumbnail Url" and skipped that column silently.
+      2. Nothing else. Books added from the trending feed used to save a blank
+         Summary because Open Library's index carries no description; the site
+         now fetches one before writing.
+
+A write worked yesterday and fails today after editing Code.gs.
+    Apps Script serves the last DEPLOYED version, not the last saved one.
+    Deploy > Manage deployments > pencil > New version > Deploy. Creating a NEW
+    deployment gives a new URL and breaks APPS_SCRIPT_URL until you update it.
+
+Every write fails with a CORS error.
+    Something changed the request's Content-Type. It has to stay text/plain —
+    the one JSON carrier that never triggers a preflight, which Apps Script
+    cannot answer. See js/core/http.js.
+
+The site loads but shows no books and no error.
+    The bridge is unreachable and the published CSV is being used instead,
+    which reads through Google's cache and can be a few minutes stale. Run
+    testSetup to see what the bridge thinks. If PUBLISHED_CSV_URL has also
+    stopped working, re-publish: File > Share > Publish to web > Entire
+    document > Comma-separated values.
+
+Every search returns nothing, on every scope.
+    Almost always GOOGLE_BOOKS_COUNTRY. Open the browser console: a 403 whose
+    message mentions an unknown location is exactly this. Set the two-letter
+    code for wherever the site is being used from.
+
+Trending is empty but search works.
+    Open Library's trending endpoint is the one thing here that can be down on
+    its own. Search, browse and everything to do with the sheet are unaffected.
+
+A book was marked read twice.
+    It should not be possible — the bridge refuses. Run cleanDuplicates() for
+    rows that predate the check.
+
+
+9. The tests
+------------
+
+Nine suites, all plain Node, nothing to install:
+
+    for f in assets/tests/*.test.mjs; do node "$f"; done
+
+105 assertions. Worth running after any change to the sheet columns, the write
+path, or the stylesheet. bridge.test.mjs is the one to run after touching
+Code.gs — it checks that the browser and the bridge still agree about what
+counts as the same book.

@@ -1,0 +1,28 @@
+SIDTRAILS — A TRAVEL JOURNAL & ANALYTICS DASHBOARD
+
+WHAT THIS IS
+SidTrails is a personal travel website that works like a living scrapbook and dashboard in one. It shows where the owner has travelled, the places still on the wishlist, the monuments and heritage sites seen, the adventures done, the travel goals being chased, and a photo gallery of the journeys, all laid out in a clean, magazine-style design. It is a single website you open in a browser; there is no app to install and nothing complicated to set up.
+
+HOW IT WORKS IN SIMPLE TERMS
+All the travel information lives in a Google Sheet, and all the photos live in a folder. The website reads from both and turns them into the nice cards, tables, charts and map you see on screen. The best part is that you never have to touch the code to update it: change a row in the Google Sheet and the website updates itself within a few minutes, and drop new photos into the gallery folder to add them to the gallery. So day to day, you manage your travels in a spreadsheet and a photo folder, and the website takes care of presenting everything beautifully.
+
+THE PARTS OF THE WEBSITE
+The page is built from several sections, each doing one job. At the very top is a hero banner with the title and a few favourite photos angled like a fan. Below that is a quick statistics strip showing headline numbers, such as how many places have been visited, how many countries and states, and similar highlights, along with a few small charts. There is a places section that shows every destination visited as a photo card and every dream destination as a wishlist card, with simple tabs to switch between All, Visited and Wishlist and a search box to find a place quickly. There is a heritage section called Heritage in stone that lists temples, palaces, monuments and landmarks in neat tables, with a filter to view them by region of the country. There is an adventures section that groups activities into water, air, snow and land, so you can tap a category and see just those. There is a goals section that works like a bucket list, showing each travel goal with a progress bar so you can see how close each one is to being completed. There is a contact section with a simple postcard-style form so visitors can send the owner a message. There is a map that drops a pin on every place travelled, grouping nearby pins together so the map stays tidy. And there is a footer at the bottom with a quote, some links, a few mini stats, and a card that opens the photo gallery.
+
+THE PHOTO POPUP
+In the places, heritage and adventures sections, clicking any card or row opens a large photo popup with the picture and a few details about it. Inside that popup there are soft left and right arrows, plus a small counter showing your position, so you can flip straight through the rest of the items in that same section without closing the popup each time. For example, open one adventure and you can arrow across to the next adventure right away. The arrows only browse within whatever you were already looking at, so they respect the section and any filter you have on, and you can also use the keyboard arrow keys, with the Escape key to close.
+
+THE GALLERY PAGE
+The gallery is its own separate page, reached from the card in the footer, and it shows the travel photos and videos in a flowing, pinboard-style grid that matches the rest of the site. Tapping any photo opens it large. To add more pictures you simply put them in the gallery folder and refresh, with one small extra step on Windows where you double-click a little included helper file that updates the gallery's list of photos before you save your changes online.
+
+THE FILES, KEPT SIMPLE
+The project is small. The main file is the dashboard itself, which contains the whole homepage you have been reading about. There is a second file for the gallery page. There is a folder that holds all the photos and videos, along with a list of those photo names and the small Windows helper that keeps that list up to date. There are also two leftover files kept only as backups, an older copy of the gallery and an older version of the dashboard, which are not used by the live site. That is the entire structure.
+
+THE LOOK AND FEEL
+The design is soft and editorial, like a travel magazine, using gentle pastel colours, a blush background, and a mix of elegant serif headings with clean body text. It is built to feel light and calm rather than busy, it adjusts neatly to phones and tablets as well as computers, and it eases back on animations for anyone who prefers less movement on screen.
+
+WHAT POWERS IT BEHIND THE SCENES
+Without getting technical, the site quietly uses a few well-known free tools that load automatically: one to draw the map, one to read the travel spreadsheet, one to add the gentle reveal animations as you scroll, and one to send the contact-form messages by email. None of these need any installation; they come along with the page on their own.
+
+HOW YOU KEEP IT UP TO DATE
+Two simple habits run everything. To change what the site says about your travels, edit the Google Sheet. To change the photos, update the gallery folder. When you want those changes to appear on the live website, you save and publish the project, and the site refreshes with your latest travels and pictures.

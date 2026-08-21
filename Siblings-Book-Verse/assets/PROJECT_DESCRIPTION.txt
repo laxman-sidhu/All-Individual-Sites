@@ -1,0 +1,764 @@
+BookVerse - project description
+==============================
+
+What this is
+------------
+A static site for three siblings who keep what they have read in one Google
+Sheet. It searches two free book APIs, cross-references everything against the
+sheet, and writes back to it.
+
+Plain HTML, CSS and JavaScript as ES modules. No server, no framework, no build
+step. It runs on GitHub Pages. The only thing behind it is one Apps Script web
+app deployed from inside the spreadsheet, which both reads the sheet and writes
+to it.
+
+    index.html       discover: search, trending, browse by subject, the readers
+    library.html     All Read Books, filtered by reader and shelf
+    editions.html    every printing the Other Versions column knows about
+    readlist.html    the queue, filtered by whose it is
+
+Layout
+------
+    css/style.css              one stylesheet for all four pages
+    js/config.js               every credential and constant
+    js/core/
+        util.js                escaping, normalisation, storage, helpers
+        cache.js               TTL cache over memory plus sessionStorage
+        http.js                fetch with retry and timeout, and the text/plain POST
+        csv.js                 the published-sheet parser used when the bridge is down
+    js/data/
+        sheets.js              read both tabs, map columns by header name
+        snapshot.js            the last known sheet, in localStorage
+        identity.js            what counts as the same book
+        editions.js            the Other Versions cell, read and written
+        library.js             All Read Books, grouped one entry per book
+        readlist.js            the Readlist, same shape
+        writer.js              the ONLY module that writes
+        auth.js                who may press the write buttons
+    js/books/
+        api.js                 Google Books and Open Library, normalised
+        discover.js            search, trending, browse, details, related
+    js/ui/
+        nav.js                 the shared navbar and the reload button
+        cards.js               card markup and covers
+        faces.js               the reader pile, under both of the next two
+                               because both draw it and neither may import the
+                               other
+        cardactions.js         the action bar on every card
+        actions.js             the gate, the dialogs, the write calls
+        detail.js              the book modal, shared by all pages
+        scrollfade.js          the edge fades on any row that scrolls sideways
+        tip.js                 the one tooltip, drawn on body because every
+                               place one is wanted is inside something that clips
+        toast.js               pending, success and failure feedback
+    js/pages/
+        discover.js            index.html
+        collection.js          BOTH library.html and readlist.html
+        editions.js            editions.html
+    assets/apps_script/        Code.gs, the read and write bridge
+    assets/images/             the three portraits and the favicon
+    assets/tests/              twelve Node suites, no dependencies
+    assets/                    this file and SETUP.txt
+
+The root holds four things: the four HTML pages, css/, js/ and assets/.
+Anything not served to a visitor on every page load lives under assets/.
+
+collection.js is one controller driven by window.PAGE_CONFIG set in each page.
+Don't fork it into two files - the two pages differ in their source and their
+wording, not in their behaviour.
+
+Dependencies flow one way. js/ui may import from js/data and js/books; those
+never import from js/ui. Nothing outside js/data/writer.js writes to the sheet.
+
+The data source
+---------------
+One Google Sheet, two tabs.
+
+    All Read Books   Title | ISBN | Author | Genre | Thumbnail Url | Read by Who ? | Summary
+    Readlist         Title | ISBN | Author | Genre | Thumbnail Url | Summary | Readlist of Who ?
+
+                     Book Id, Year and Date Read are optional on either tab and
+                     are written when the column exists.
+
+Columns are found by header name, never by position. This is load-bearing:
+columns get moved and renamed by hand. Both sides do this independently - the
+alias tables in js/data/sheets.js and COLUMN_ALIASES in Code.gs - and
+bridge.test.mjs asserts that every spelling one side accepts, the other accepts
+too. Otherwise a rename breaks writes only, which looks like nothing at all
+until a book will not save.
+
+Where two columns name the SAME field, the first wins, on both sides. That is
+the case a half-done rename creates.
+
+GREEN NEEDS A NUMBER. A title and an author agreeing is not enough to say we
+have read the printing on screen, and treating it as enough is what turned a
+search for "The Gift of the Magi" into ten green cards when one edition of it
+is on the shelf. find() compares only the printing a record claims to BE -
+isbn13, isbn10, isbn - against the row's own ISBN, and a different number is a
+different printing however well everything else lines up.
+
+Silence still says nothing. A row with no ISBN, or a record naming no printing
+of its own, stays eligible for a title match, because neither has said anything
+to disagree with. Without that half, find({ title, author }) - which the modal,
+the collection pages and every remove path use - would stop finding anything.
+
+Everything the title alone can claim is an EDITION, so it lands in
+versionMatch() and comes back yellow. That has three routes, tried in order:
+the book's own ISBN against the versions index; then every ISBN the record
+knows itself by, which is what catches a trending card whose cover number is a
+coin flip; then the TITLE AND AUTHOR against a row with a different number or
+none, because Open Library files one book under several work records and a
+printing can be missing from the versions cell entirely and still plainly be an
+edition of something we have. The author route accepts ONE character of
+difference, because Open Library carries "Paulo Coello" for "Paulo Coelho" and
+a typo should not make a book a stranger; find() does not. A different AUTHOR
+under the same title - Ben Jonson's play - never matches at all.
+
+versionMatch() also reports HOW it matched, and the card says which. "isbn"
+means the sheet names this exact number and the sentence is a statement -
+"Another edition is read by Siddhesh". "guess" means only the title and author
+line up, and the sentence hedges - "Probably another edition". A guess is
+exactly what the "another edition" button exists to settle.
+
+Yellow means one thing only: we have READ a different printing of this. A
+printing of something on a READLIST is still a waiting book, so it keeps the
+violet and says "Readlist edition" rather than borrowing a colour that claims
+we have finished it. versionKind() is the one decision, used by the markup, the
+repaint and the status pills alike, and read outranks queued where a book is
+somehow both. The status row follows it, so every bucket holds one colour: a
+violet edition is counted under Readlist, not under Other edition.
+
+Both libraries keep THREE indexes, and the difference between them is the
+difference between the three colours on a card. byIsbn is the exact printing on
+the shelf. byVersion is every other printing of it, read out of the Other
+Versions cell. byKey is title and author, for the rows that carry no number at
+all. findVersion() walks the first two with every ISBN the book in hand knows
+itself by; find() never touches byVersion, because "we read this" and "we read
+another edition of this" must never be shown as the same claim.
+
+Both of those lookups used to ask byKey for keys spelled "isbn:...", which byKey
+has never held. They returned null for every input ever passed to them, silently
+- which is also why the modal's "another edition is on someone's shelf" note
+never once appeared.
+
+There are no favourites, deliberately. Three people share one shelf, so a
+favourite would either be one person's opinion stamped on everyone's row or
+three flags fighting for one corner of a card. Neither is worth the column. What
+"my books" means here is the reader filter, which is the same question asked in
+a way the sheet can actually answer.
+
+Reading falls back to the published CSV when the bridge is unreachable. That
+path exists so a broken deployment costs the write buttons rather than the whole
+site. It goes through Google's few-minute cache, so a write can be invisible
+there until it expires — which is the reason the bridge is the primary route
+and not the other way round. js/core/csv.js is a full RFC 4180 parser rather
+than a split on commas, because the summaries on this sheet are paragraphs, with
+line breaks and quotation marks, inside a single cell.
+
+Identity: what counts as the same book
+--------------------------------------
+An ISBN wins outright where there is one. It is the only true identifier a book
+has, and it settles matching in BOTH directions: the same ISBN is the same book
+whatever the titles say, and a DIFFERENT ISBN is a different book whatever the
+titles say. That second half matters as much as the first - it is what keeps two
+editions of one novel as two rows instead of collapsing them - and it applies to
+the title fallback too, so a row with a different ISBN is rejected even when the
+title and author line up perfectly. A row with no ISBN says nothing and stays
+eligible for title matching, and so does a RECORD with no ISBN: ownIsbns() is
+the test, and it deliberately ignores editionIsbns, which lists the work's other
+printings rather than the one being shown.
+
+A leading article is not part of a title. Every catalogue shelves "The
+Metamorphosis" under M, and the sheet and the APIs disagree about whether to
+type it at all - so one card said Metamorphosis, the row said The Metamorphosis,
+and they were two books. filingTitle() strips it, and it is DELIBERATELY not
+folded into the general normaliser: normaliseAuthor is built on that one, and
+stripping a leading article off a name turns A. A. Milne into A. Milne. English
+only, because "De" and "Il" are articles in one language and words in another.
+Code.gs holds the same rule and bridge.test.mjs compares them - without that a
+write would land on a row the site can no longer find.
+
+ISBN-10 and ISBN-13 are converted to the 13-digit form before anything is
+compared. 0062315005 and 9780062315007 name the same book, and without the
+conversion a hand-typed row would never match a search result. Both the browser
+and Code.gs do this, and bridge.test.mjs compares them.
+
+A search result carries MORE than one ISBN, and throwing the rest away was the
+bug that made the whole Other Versions column look broken. Open Library's index
+returns every printing of a work in one flat array - around two hundred of them
+for The Alchemist - and the reader used to keep the first 13-digit one and drop
+the rest. That pick is effectively a coin flip, so the number on a trending card
+for O Alquimista was almost never one the sheet had ever heard of. The whole
+list now rides along as editionIsbns, capped at 150 because the trending feed is
+kept in localStorage, and versionIsbnsOf() in js/data/identity.js reads it
+alongside the sheet's own cell text, which arrives as a string rather than a
+list.
+
+Where there is no ISBN, identity is the TITLE and the AUTHOR
+together. js/data/identity.js holds the only definition and both libraries use
+it.
+
+Title alone is not enough and never was: "The Alchemist" is Paulo Coelho's and
+also Ben Jonson's play. Author alone is meaningless. Together they are specific
+enough that a collision means two genuinely different books with the same title
+by the same person.
+
+The author key drops spaces as well as punctuation, so "J.K. Rowling",
+"J. K. Rowling" and "JK Rowling" are one person. Every source spells that name
+differently and the sheet has its own habits; without this the same author is
+three authors and nothing matches across them.
+
+Normalisation is unicode-aware and had to be. \w is ASCII-only, so a Devanagari
+or Japanese title would normalise to the empty string and stop being indexable
+at all. It is [^\p{L}\p{N}\p{M}\s] with the /u flag. \p{M} is in there because
+a Devanagari vowel sign is a combining MARK, not a letter - without it "अलवणी"
+normalises to "अलवण" and the row on the sheet never matches itself. The Latin
+combining accents are stripped separately beforehand, so "Héctor" still becomes
+"hector". Code.gs holds the same rule and bridge.test.mjs compares the two
+character by character.
+
+A blank author says nothing rather than saying "no author". A row with no author
+is filed under the loose key and reachable by title alone; a QUERY with no
+author matches on title alone too. But a query that HAS an author never falls
+back, so two different authors are never confused. find() and sameBook() follow
+the same rule, which they did not at first - find() was map-based and could not
+express the wildcard, so a title-only lookup silently missed every row that had
+an author.
+
+One book, many readers
+----------------------
+This is the shape the whole site is built around, and it comes from the sheet:
+"The Alchemist" is two rows, one for Siddhesh and one for Pratiksha.
+
+The library groups rows into one ENTRY per book, carrying the list of people who
+read it. One card, two faces. Two cards would mean the same book appearing twice
+in a grid of nine, and a heart ticked on one not updating the other.
+
+Marking something read asks WHO, and writes one row per person chosen. Removing
+asks whose row should go, when more than one person has it - and offers to take
+them all. A person who has already read a book cannot be added again; a second
+person for the same book is a new row, not a duplicate.
+
+Blank fields are filled from later rows. If the first Alchemist row has no cover
+and the second does, the entry gets the second one's. Nobody fills in every cell
+every time.
+
+The two APIs, and which one runs when
+-------------------------------------
+Free only. That was the constraint, and it rules out Goodreads (closed),
+Hardcover and ISBNdb (paid past a trial). The two main ones need no key at all.
+    Google Books      search, descriptions, page counts, publishers, ISBNs
+    Open Library      trending, subject browsing, covers, ratings, editions,
+                      and the two endpoints that resolve ONE printing by ISBN
+
+
+assets/APIS.txt lists every endpoint, what it answers and what happens when it
+does not.
+
+Google failing is not a reason to show nothing. A wrong country gets a 403 and
+the per-IP quota gets a 429, and in either case Open Library answers the same
+question from a different index. Every Google call in the search path is
+therefore allowed to fail, and only the failure of BOTH is an error - at which
+point the real message is shown rather than a friendly nothing, because "403,
+unknown location" is the difference between a bug and a one-line config change.
+
+Google Books requests must state a country. Google answers 403 "unknown
+location" to browser requests from several countries, India among them, unless
+the query carries country=XX. Every search fails without it and nothing in the
+response explains why, which makes it the single most likely cause of a site
+that loads but finds nothing.
+
+The trending endpoint has to be asked for its fields BY NAME. Left to itself it
+answers with a short default set carrying no isbn at all, which is why the same
+book could be recognised through search.json and not through trending - the two
+looked identical downstream and were not.
+
+Refine SHORTLISTS what is on screen. It asks nothing of either API - the search
+bar is where a new question goes - so every option in the panel is one the cards
+themselves can answer, and the lists are built from the results in hand and
+counted. A language nothing on screen is written in is not offered at all, which
+is what stops a filter quietly emptying the grid. Sorting is client-side too, so
+"Load more" repaints under a sort rather than appending past the end of it.
+
+The status row under the results is the opposite, and deliberately: All, Read,
+Other edition, Readlist, New to us. Neither API knows anything about our sheet,
+so this one can only ever filter what has already been loaded and cross-
+referenced. It counts over everything loaded rather than over what is drawn, so
+the numbers do not move the moment one of them is chosen, and an empty bucket
+stays in place and inert rather than vanishing and reflowing the row.
+
+"best short stories" is a request for a SHELF, not a title. Google ranks it as a
+phrase and answers with novels that happen to carry those words, which is how a
+search for short stories comes back full of long ones. A leading superlative is
+stripped, the filler removed, and what is left is asked of the subject index
+sorted by rating. Nothing shelved under it means it was probably a title after
+all - "best served cold" - so the ordinary search runs behind it.
+
+Which one runs is not a preference. Google Books ranks a bare phrase far better
+and is the only one of the two that reliably carries a description. Open Library
+is the only one with a popularity signal at all - Google has no trending
+endpoint and no equivalent - and its subject browsing is a real index rather
+than a text search for the subject's name.
+
+So: search goes to Google, trending and subject browsing go to Open Library, and
+the search falls through to Open Library only when Google comes back empty. That
+last step is not a retry of the same question: Open Library holds editions
+Google does not, especially older and regional ones, which is exactly the case
+where a search for something on this family's shelf would otherwise fail.
+
+An ISBN is a LOOKUP and never widens into a search. This was the worst bug the
+site had. A number found nothing on Google's isbn: index, the relaxed retry then
+searched for the digits as words, and the Open Library fallback asked q= rather
+than isbn= - so a search for the HarperOne English Alchemist came back as
+O Alquimista, published by Gelios, carrying a number nobody had typed. It looked
+like an answer, which is what made it dangerous.
+
+The ISBN scope now has its own path in searchByIsbn(). Both forms of the number
+are asked of both APIs at once, every candidate is checked against the number it
+claims to be, and nothing that fails that check is shown. Open Library's edition
+endpoints lead, because they are the only ones that know 9788845269110 is the
+Italian Vallardi printing and 9780062315007 is the English HarperOne one; Google
+fills in the description it usually carries and Open Library usually does not.
+Where neither holds the number, the answer is that neither holds it. A wrong
+book is worse than no book, and an empty result is honest.
+
+For the same reason a record found by TITLE never donates an ISBN, a publisher
+or a page count to a book that already has them. It is the same book but not
+necessarily the same edition, and quietly replacing an edition's details with
+another printing's is how one book starts looking like two.
+
+A quoted field search runs before the unquoted one. intitle:"animals on the
+train" can come back empty where the same words unquoted do not, so the narrow
+query is tried first and the wide one only if needed. Two requests in the
+failing case, one in the common one.
+
+Both sources are normalised into ONE book shape in js/books/api.js, and nothing
+downstream knows which API answered. This is where the per-source oddities are
+absorbed, and there are several. Google's thumbnails arrive over http with a
+page-curl overlay drawn into the image, so both are corrected. Their categories
+are paths - "Fiction / Fantasy / General" - so they are split and the repeated
+root is deduplicated. Their descriptions are HTML and Open Library's are not, so
+both are stripped. Open Library returns a different shape from search.json than
+from subjects.json - cover_i versus cover_id, author_name versus authors[] - so
+each gets its own reader rather than one that guesses. Their ratings come back
+as 4.283 and are rounded once, here, rather than in three places later.
+
+The detail modal fills the gaps from the other side. Google usually has the
+description and the page count; Open Library usually has the subjects and the
+rating. Whichever source a book came from, the other is asked for what is
+missing - by ISBN when there is one, by title and author when there is not.
+
+The modal does not list the other editions any more. Ninety printings of one
+novel answered a question nobody asked and buried the only line that mattered
+underneath it. What is left is that line: whether one of those printings is
+already on a shelf or a readlist, and a link to editions.html for the ones we
+have written down. The list is still fetched, because resolving it is what lets
+the modal settle its own flags from the whole work rather than from the single
+ISBN a search index happened to hand over.
+
+The editions page
+-----------------
+editions.html is that list, in the one place where it is the question rather
+than an interruption. Everything on it comes out of the Other Versions column -
+no API is called, because the column is exactly the answer already fetched and
+written down.
+
+One block per book, a dropdown to narrow to one, and a search box over the ISBN,
+the publisher and the language, which is how "is this printing one we know?"
+gets asked. Closed, a book shows exactly ONE ROW - two cards on a phone, a dozen
+zoomed out - because a fixed six is a number that fits no screen in particular
+and leaves a ragged half-row on most of them. Nothing in the code knows that
+number: the grid works it out from the width, so settleRows() asks the grid how
+many tracks it made, marks every card past that hidden, and writes the count of
+what is left onto the button - "Show 24 more" at twelve across, "Show 34 more"
+at two. It runs again on resize, because zooming out to fit twelve is a resize
+and the old number would be a lie afterwards. Thirty cards are rendered at most,
+which is a ceiling on the covers a hidden card would otherwise ask for.
+
+Show all opens the rest as a RAIL that scrolls sideways rather than a grid that
+grows: a hundred cards stacked would push every other book off the page, and
+comparing printings against each other is the whole point of the view. Show less
+puts it back. Picking a book by name opens it, because that is what asking for
+it meant.
+
+The printings are the SAME cards as everywhere else, annotated the same way, so
+the colours carry their usual meaning without a legend: our own printing leads
+each block in green, the rest are yellow, and one sitting on a readlist is
+violet. Covers come from Open Library by ISBN and fall back to the title, which
+is the pattern used everywhere and the honest answer for a printing nobody has
+photographed. Their chips carry the publisher and the language, because that is
+where one printing differs from the one beside it. The cards carry no action
+bar - marking a specific printing read from here would write a second row for a
+book already on the shelf - and open the modal instead.
+
+js/data/editions.js parses a line back into its parts. Only the ISBN is
+load-bearing, and the rest is what a human wrote, so the parser has to survive
+the real cell: a publisher with a full stop at the end, a publisher with a comma
+and a dot in the middle - Editorial Planeta, S.A. - a language code the script
+could not name, a line with no year, and a line with no language. An ASIN and a
+stray number are not ISBNs and yield nothing, exactly as parseVersions() does.
+
+editionLine() is the ONE definition of the format, and js/books/discover.js
+builds its lines with it. OtherVersions.gs writes the same shape, and
+editions.test.mjs evaluates Code.gs to check the bridge reads a cell the way the
+browser does.
+
+There is no "related books" endpoint on either source. The two strips under a
+book are what can honestly be built: everything else by the same author, and
+everything else under its strongest subject.
+
+Both strips were Google and nothing else, which is why they so often simply did
+not appear: a modal fires several requests at once and the per-IP quota answers
+429. Each one now falls through to Open Library - the search index for the
+author, the subjects index for the subject - so one refusal costs nothing.
+
+"Strongest subject" is the most SPECIFIC one, not the first. Google files
+everything under a path whose root is almost always the word "Fiction", and
+a strip of everything filed under Fiction is not a recommendation. inauthor: is
+a loose operator that returns books ABOUT a person as well as by them, so the
+author strip is filtered back down to the name it promises.
+
+Covers
+------
+No placeholder graphic anywhere. A missing cover shows the TITLE in its place -
+a generic book-spine graphic says nothing, while the title says exactly which
+book has no artwork.
+
+The pattern is the same everywhere: the fallback is rendered BEHIND the image,
+and the <img> is only emitted when there is a URL. An image that fails simply
+reveals the text underneath, with no error handler, which covers a dead URL as
+well as an absent one. The image must be POSITIONED for that to hold - a
+positioned element paints above a non-positioned one whatever the source order
+says. css.test.mjs checks every fallback-behind-image pair.
+
+A second cover URL rides along as data-fallback-src and is swapped in by a bound
+error listener, not an inline onerror. Google's thumbnails are 128px wide, which
+shows its pixels in a modal, so where a book has an ISBN the larger Open Library
+cover is tried first. When Open Library has no cover for that ISBN it 404s -
+which is why the URL carries ?default=false, since without it the covers API
+returns a blank 1x1 image that would never trigger the fallback.
+
+Writing back
+------------
+js/data/writer.js is the only module that changes the sheet.
+
+Google first, memory second. A failed remote write changes nothing locally; the
+reverse order would display changes that were never saved.
+
+Marking read appends every reader's row AND deletes the book from the Readlist
+in ONE Apps Script call. Two calls can half-fail and leave a book in both places.
+
+The duplicate check exists TWICE, on purpose. The site refuses in memory and
+Code.gs refuses at the sheet. The memory half keeps the screen honest between a
+click and its write; the sheet half is the one that actually holds, because it
+is the only side a second device or a hand edit goes through.
+
+Removing takes every matching row, not the first. A duplicate that predates the
+identity check has to leave with the row that was clicked, or it comes straight
+back on the next load.
+
+Filing another edition is the fifth write, and the only one that changes a cell
+rather than a row. Browsing turns up printings the versions cell has never heard
+of - Open Library has hundreds for a popular novel and the lookup keeps fifty -
+so the card carries a button that asks which book on the shelf this is a
+printing of, shows the exact line before writing it, and appends it to EVERY row
+for that book, because each row carries its own copy of the cell. The Count
+column moves with it.
+
+It refuses twice, like the others: the site refuses a number already in the cell
+or the printing already on the row, and Code.gs refuses the same two at the
+sheet. The button is only drawn where filing would mean something - not on a
+book we have read, not on one queued, and not on one the sheet already names by
+ISBN. A yellow GUESS is the case it exists for, and a card with no relation to
+anything is the other: O Alquimista shares no title with The Alchemist, so
+nothing but a person can say they are the same book.
+
+Nothing here writes to the Readlist. A queue entry is a book, not a printing.
+
+Who may write
+-------------
+js/data/auth.js holds one shared password and a signed-expiry session in
+localStorage. Every write goes through withOwner in js/ui/actions.js.
+
+This runs in the browser, so it is a convenience and not a security boundary. It
+stops an accidental click and a casual visitor. The thing that actually protects
+the sheet is the token Code.gs checks before it touches a cell. That token is in
+js/config.js and therefore public; SETUP.txt section 7 spells out exactly what
+that exposes and how to close it.
+
+Fails closed. With APPS_SCRIPT_URL or OWNER_PASSWORD unset the site is read-only
+and the buttons are hidden rather than failing silently.
+
+The gate UX: a visitor who clicks a write button gets "This is the Sawants' book
+diary" with Yes, that's us / No, go back. The password field only appears after
+Yes. A bare password prompt on someone else's site reads as a wall; the sentence
+reads as an answer. Whatever was clicked replays after signing in.
+
+Feedback while writing
+----------------------
+An Apps Script write takes one to two seconds.
+
+The card repaints immediately and optimistically, so the click registers at
+once; the flags are snapshotted first and restored exactly if the write fails,
+because "undo the last reader" and "undo everything" look identical on screen
+but differ in the sheet. The pressed button replaces its icon with a spinning ring,
+so the control reports its own state rather than relying on a strip elsewhere. A
+toast appears with the verb in progress - "Adding to read books..." - and the
+same toast becomes "Added to read books — The Alchemist" or turns red with the
+reason it failed; it is returned as a handle so it settles in place rather than
+being replaced by a second one stacking underneath.
+
+The card never fades and never stops accepting clicks: only the pressed button
+goes inert, so a second book can be added while the first is still saving. The
+button is released by re-finding it after the write, not by reusing the
+reference, because repaint() replaces the element and the old handle is detached
+by then.
+
+The verb stays the same through the flow. The button that says Add produces a
+toast that says Added.
+
+Asking the right questions
+--------------------------
+Marking read asks who, then which shelf, then optionally the summary. Adding to
+the readlist asks whose it is, then which shelf — and refuses without an owner,
+because "Readlist of Who ?" is a real column and a blank one leaves a row no
+queue can claim.
+
+Neither of the first two can be guessed. An API knows a book's subjects; it does
+not know whether this family files it under "Fictional" or "Short Story", and
+those are the words on the existing sheet. The shelf list is rebuilt from the
+rows already there, so a shelf typed in by hand appears next time with no code
+change, and "+ Other" is always last so no value is unreachable.
+
+A trending or subject result carries a title, an author and a cover and nothing
+else: Open Library's search index holds no description and often no ISBN. So a
+book marked read straight from the grid used to save a blank Summary and a blank
+ISBN, silently. Both dialogs now enrich the book from the other source while
+they are already on screen, and the write waits for that to land - the wait is
+hidden behind the spinner that was going to be there anyway.
+
+The summary is prefilled from the API and editable, because the summaries
+already on the sheet are clearly written by hand and are better than anything an
+API returns. Its line breaks are preserved end to end - read, written and
+rendered - because they are the writing. clean() collapses whitespace and is
+right for a title; cleanLines() keeps the paragraph shape and is what every
+summary goes through. The modal renders those lines as real paragraphs, and sets
+the first one larger, because these blurbs all open with a hook on its own line. Prefilling means it is one tap to accept and still one field to
+rewrite. It is folded away by default so it never blocks the common case.
+
+The readlist asks for the shelf and, optionally, whose pick it was.
+
+Speed
+-----
+The sheet is snapshotted to localStorage and hydrated SYNCHRONOUSLY before the
+first paint. This is the one that matters most: without it a refresh paints the
+grid and then turns the read cards green a second later, when the bridge read
+lands. Flags arriving after covers reads as the page correcting itself, which is
+worse than a slower page. The live read still runs in the background and
+replaces the snapshot; the grid only repaints the cards where the two actually
+disagree, because repainting an identical grid is a frame the user sees as a
+flicker.
+
+One bridge request for both tabs, so a first load pays the Apps Script cold
+start once.
+
+js/core/cache.js caches over memory and sessionStorage. Empty result sets are
+deliberately not cached - a book added to the API tomorrow should be findable
+tomorrow. "Empty" has to mean an empty LIST inside the envelope, not an absent
+object: both APIs wrap their results, so an all-zeros response is a perfectly
+present object and would otherwise be cached as a real answer.
+
+Covers are lazy and decode async. Fonts and both image CDNs are preconnected.
+The page controllers are modulepreloaded. No build step, so no bundle to
+download and nothing to invalidate.
+
+The theme
+---------
+The pastel palette is carried over unchanged from the first version - the same
+plum, lilac and blossom, on the same near-white paper. It was the one thing
+about the old site worth keeping exactly.
+
+Two changes around it. The display face is now Fraunces, a soft variable serif,
+against Poppins for everything else; one typeface doing both jobs is what made
+the old pages read as a template. And three colours are committed: green means
+this exact edition is read, violet means queued, yellow means a DIFFERENT
+printing is on a shelf. Everywhere - the tick, the tag, the border, the dot on
+the status pill. Nothing else may borrow them, which is why the cast of a card
+is otherwise one neutral treatment.
+
+The violet is deliberately more saturated than the plum the furniture is drawn
+in, or a queued card reads as a piece of the page rather than as a state. The
+gold that used to mean queued survives as --star and now belongs to the rating
+alone, which is a fact about a book and not a fact about our shelf. Each state
+also carries a two-pixel ring, because a one-pixel border is not visible from
+across a grid of nine.
+
+The portraits do three jobs rather than one. They are the reader cards on the
+home page, the faces on the cover of every book that person has read, and the
+buttons in the "who finished it?" picker. That last one is the reason the
+question is quick to answer on a phone.
+
+Traps
+-----
+A tooltip cannot be drawn inside a card. Both .card and .card__cover are
+overflow:hidden and have to stay that way, or a cover spills past its own
+rounded corners - so the old ::after bubble on the version tag was clipped on
+every screen it ever rendered on, and no z-index would have helped. js/ui/tip.js
+draws one bubble on <body> in fixed position instead, flipping above the trigger
+when there is no room below and pulling back inside the viewport at the edges of
+the grid. The sentence is also printed under the title now, at every width,
+rather than being revealed only by a hover a phone cannot perform.
+
+The tooltip places itself by MEASUREMENT, not arithmetic. :root carries zoom on
+a wide screen, and whether that scales a fixed element's own offsets differs by
+browser - so the bubble is parked at 0,0, asked where that actually landed, and
+moved by the difference. Computing it instead put the bubble below the fold on
+half the grid, which looked exactly like a tooltip that never fired.
+
+The sentence is not printed on the card any more. It is the label on hover for a
+pointer and a tappable "i" in the corner for a phone, and the stylesheet shows
+exactly one of the two - `(hover: none)` as well as a width, because a touch
+laptop has the width and not the hover. Both carry the same data-tip, so one
+tooltip serves both, and .card__info is in the IN_CARD guard so a tap on it
+never also opens the modal.
+
+That tooltip is measured against the viewport, and :root carries zoom on a wide
+screen. getBoundingClientRect() reports real screen pixels either way, but an
+offset written to style.top is multiplied by that zoom before it lands - so
+place() divides it back out. Without that the bubble appears at 70% of the way
+down the page and misses the card it belongs to.
+
+Class names in the stylesheet are load-bearing. Renaming a class in JS without
+renaming it in CSS produces an unstyled element rather than an error.
+css.test.mjs checks every class the JS and the HTML emit against every class the
+CSS defines. It has already caught one: .dialog__foot existed in the dialog
+shell and in nothing else, a control that could never do anything.
+
+A bare 1fr is not an equal column. repeat(N, 1fr) is repeat(N, minmax(auto,
+1fr)), and that auto minimum is the longest unbreakable word in the cell - so
+one long author name widens its track and starves the others, and the row
+overflows. Every fixed-count grid here uses minmax(0, 1fr), and every text
+element that can hold a long word carries overflow-wrap. Both halves are
+asserted.
+
+CSS ordering. Everything below the "Phone" banner at the foot of style.css is an
+override, and at equal specificity the later rule wins at every width. Anything
+new goes at the BOTTOM. Keep it there.
+
+The navbar needs one member that can give. It holds a name, three links and two
+tools, and on a 360px screen those add up to more than the screen - at which
+point the sticky background ends where the viewport does and the content does
+not, which looks like every element below it is misaligned rather than like one
+row overflowing. The wordmark is the only part with no hit area to protect, so
+it carries min-width: 0 and an ellipsis, loses its labels first, and disappears
+entirely under 430px leaving the mark to carry the brand. Adding a fourth nav
+link is what will break this next; css.test.mjs checks the shrinking half.
+
+A grid ROW GAP is charged even between empty tracks. Hiding the surplus by
+giving the first row its height, every row after it none, and clipping the
+overflow does not work: the gaps between those zero-height tracks still take
+their space, so the container ends up taller than one row and a stripe of every
+hidden card's border shows underneath it - which on this page was a row of
+yellow lines under every book. Hiding the cards themselves is the fix, and it
+needs the column count, which is why settleRows() measures rather than clips.
+
+A row that scrolls sideways must say flex-wrap: nowrap. With wrapping left on,
+overflow-x: auto never fires - the row wraps to a second line instead and the
+scroll it was given is dead. The period pills and the status buckets both do
+this on a phone, where three lines of pills above the grid is more furniture
+than answer, and css.test.mjs checks for the pair.
+
+Apps Script serves the last DEPLOYED version, not the last saved one. Editing
+Code.gs and pressing save changes nothing the site can see: Deploy > Manage
+deployments > pencil > New version > Deploy. Creating a NEW deployment gives a
+new URL and breaks APPS_SCRIPT_URL.
+
+Apps Script cannot answer a CORS preflight. Writes go out as text/plain, the one
+JSON carrier that never triggers one, and doPost parses the body itself.
+Changing that header to application/json will break every write. Asserted in
+bridge.test.mjs.
+
+ES modules will not load over file://. Serve the folder, even locally.
+
+stopPropagation does not stop sibling listeners. The card controls call it, but
+the card handler is bound to the same container, so the modal would still open.
+There is an explicit guard in js/ui/detail.js: const IN_CARD = ".cardact,
+.cardbar, .card__note". If you add another in-card control, add it to that one
+constant.
+
+Tests
+-----
+Twelve suites in assets/tests/, all plain Node, nothing to install. 179
+assertions.
+
+    identity    normalisation across scripts, title+author matching, the
+                blank-author rule
+    csv         the published-sheet parser: quoted commas, newlines inside a
+                cell, doubled quotes
+    sheets      column mapping from the real header, reordering, the spacer,
+                two columns naming one field
+    library     one book many readers, shelf narrowing, summaries keeping
+                their line breaks, every apply* path
+    api         both API shapes normalised, covers, HTML descriptions
+    discover    which ENDPOINT each scope calls, and with what parameters
+    cards       card markup, the fallback-behind-cover pattern, bar shapes
+    bridge      the browser and Code.gs agreeing, character by character
+    versions    the three colours: which claim each one makes, that a title and
+                author agreeing is never green, that silence on either side is
+                still eligible, and the case that was broken - a work whose
+                edition list holds the number on the sheet while the number on
+                its own cover holds nothing
+    editions    the Other Versions cell itself: what parses out of every shape
+                the real column holds, that what the site writes is what it
+                reads back, that Code.gs agrees, and that filing a printing
+                lands on every row for that book
+    writer      what actually lands in a cell: every column filled, the cover
+                fallback, the cleaned genre and summary, line breaks surviving
+    css         the stylesheet itself, including that a row which scrolls
+                sideways is never also allowed to wrap, and that the navbar has
+                one member willing to shrink
+
+discover.test.mjs asserts the REQUESTS rather than the results, because the
+whole feature is which endpoint is called with which parameters. A test that
+only checked the titles would pass just as happily on a call that searched the
+wrong index.
+
+bridge.test.mjs is the one that earns its place fastest. The two sides hold the
+same rules twice on purpose, and twice means they can drift - silently, because
+the bridge would write to a row the site can no longer find. It evaluates
+Code.gs directly and compares its normalisers and its alias table against the
+browser's.
+
+css.test.mjs is the odd one out and the most useful, because the bugs that
+actually ship in a stylesheet are all silent.
+
+Never verified in a real browser
+--------------------------------
+This was built without one available. The tests confirm structure, logic and the
+stylesheet's text; nothing here has a layout engine, so overlap, wrapping and
+anything measured against the viewport are unverified. If something looks wrong
+visually, that is the likeliest source, not the logic.
+
+Neither API was ever called. The response shapes normalised in js/books/api.js
+come from their documented formats, and the fixtures in api.test.mjs are real
+records. The one endpoint worth watching is Open Library's /trending/, which is
+newer and less documented than the rest. If trending comes back empty, that is
+the first place to look - search, browse and everything to do with the sheet do
+not depend on it.
+
+Outstanding
+-----------
+Pagination. Every result set stops at 24. The APIs both page and the plumbing
+takes a page number already; what is missing is the control.
+
+Book Id is written but never yet relied on, because no existing row has one.
+Once rows start carrying it, matching gets exact and the title+author fallback
+becomes the backstop rather than the primary route.
+
+Ideas discussed, not built
+--------------------------
+A reading-year timeline, since Date Read is already written. Per-person
+favourites, which would need a column per person rather than one shared flag.
+Series completion, which Open Library can almost answer. A "surprise me" button
+over the readlist. Streaming the readlist into a shareable list for someone
+else's birthday.

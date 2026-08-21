@@ -1,0 +1,25 @@
+FISHPOT STORIES — A COMMUNITY STORY-SHARING BLOG
+
+WHAT THIS IS
+Fishpot Stories is a small, fun community blog where anyone can read short personal stories and publish their own in just a few minutes. It has a playful, casual personality with a mix of Hindi and English, and it is built to feel light and friendly rather than formal. It is a simple website you open in a browser; there is nothing to install and nothing complicated to set up.
+
+HOW IT WORKS IN SIMPLE TERMS
+All the stories live in a Google Sheet, like a shared notebook. The website reads from that sheet and turns each row into a nice story card and a full story page. When someone writes a new story using the form on the site, it is sent off and added straight into that same sheet, and it then shows up on the site for everyone to read. So you never edit any code to manage the blog; the stories simply flow in and out of the spreadsheet, and the website takes care of presenting them.
+
+THE PAGES AND WHAT EACH DOES
+The site has three pages. The home page is the front door: it opens with a big welcoming banner that has a live counter showing how many stories have been published, and below that it shows the latest stories as cards, each with a picture or a coloured initial, the title, the author and date, and a short preview, with a link to read the full thing. The story page is where a single story is read in full, showing its title, who wrote it, when, and the complete text, with a button to go back to all stories. The add-story page is a simple form where anyone can publish their own story by filling in their name, a headline, a one-line summary, an optional cover image link, and the full story itself, which they can write with basic formatting like bold, italics and headings. Once they hit publish, the story is saved and appears on the home page.
+
+THE FUNNY FOOTER POPUPS
+Every page has a cheeky little surprise in the footer. There is a contact-style link at the bottom, and when you click it a popup opens and plays a short, funny meme video. Each page has its own clip to match its mood, and on the story page the link is a playful jab that invites you to go complain to the writer, which then plays its own joke video. The videos only load the moment you actually click, so they never slow the pages down.
+
+THE FILES, KEPT SIMPLE
+The project is small and tidy. There are three web pages, one each for the home, the single-story view, and the add-story form. There is a styles folder that controls how everything looks, and a scripts folder that handles loading the stories, submitting new ones, and running the footer popups, plus a small settings file that holds the links to the Google Sheet. There is an assets folder holding the banner image, the background, and the meme videos. The banner image was optimised to load fast, so the whole site stays light.
+
+THE LOOK AND FEEL
+The design is clean and modern with a soft purple and pink theme, a frosted glassy header that stays at the top as you scroll, rounded cards, and gentle shadows. It uses a single friendly font throughout, adjusts neatly to phones as well as computers, and has been tuned to load quickly and scroll smoothly.
+
+WHAT POWERS IT BEHIND THE SCENES
+Without getting technical, the stories are stored in a Google Sheet, and a small connected Google tool quietly receives new submissions from the form and writes them into that sheet. The website itself is just plain web pages with no heavy frameworks, so it loads fast and is easy to host anywhere.
+
+HOW YOU KEEP IT UP TO DATE AND MANAGE STORIES
+Running the blog comes down to the Google Sheet. New stories arrive there automatically whenever someone uses the add-story form, and you can read, tidy up, or remove any story by editing the sheet directly. If you ever move to a different sheet or reconnect the form, those links live in one small settings file. To change the banner image or the meme videos, you swap the files in the assets folder. When you want changes to go live, you publish the site and it refreshes with the latest stories.

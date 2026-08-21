@@ -1,0 +1,612 @@
+/* ---------------------------------------------------------------------------->
+   SidTrails - Gallery Page
+   --------------------------------------------------------------------------
+    01  DESIGN TOKENS
+    02  TYPOGRAPHY
+    03  NAVBAR
+    04  GALLERY HERO
+    05  MASONRY GRID
+    06  FULLSCREEN MODAL
+    07  FOOTER
+    08  LOADING / EMPTY STATES
+    09  MOBILE RESPONSIVE
+   ----------------------------------------------------------------------------> */
+
+/*  -  01 DESIGN TOKENS  - */
+:root {
+  /* Shared palette with the journal page — deepened editorial pastels */
+  --ink:        #2c2420;
+  --ink-soft:   #5f5348;
+  --muted:      #978c7e;
+  --paper:      #fffdf9;
+  --bg:         #f6efe6;
+  --bg-2:       #eee4d6;
+  --line:       #e7ddcd;
+  --line-soft:  #f2ebe0;
+
+  --pink:        #c85d73;
+  --pink-soft:   #e3a0af;
+  --pink-pale:   #f7e2e7;
+
+  --sky:         #5b8bbf;
+  --sky-pale:    #e4eef7;
+  --coral:       #d98159;
+  --coral-pale:  #fbe6d9;
+  --butter:      #c99a3f;
+  --butter-pale: #f6eccf;
+  --lime:        #6faa5f;
+  --lime-pale:   #e0edd8;
+  --mint:        #4f9d86;
+  --mint-pale:   #dcefe8;
+
+  --lavender:      #8674c0;
+  --lavender-soft: #bcaee0;
+  --lavender-pale: #ebe4f6;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-accent:  'Fraunces', Georgia, serif;
+  --font-body:    'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+  --font-hand:    'Caveat', cursive;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --shadow-sm: 0 2px 10px rgba(74, 54, 40, 0.07);
+  --shadow-md: 0 10px 28px rgba(74, 54, 40, 0.13);
+  --shadow-lg: 0 22px 52px rgba(74, 54, 40, 0.20);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { font-size: 87.5%; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse at 30% 20%, rgba(200, 93, 115, 0.07), transparent 60%),
+    radial-gradient(ellipse at 70% 60%, rgba(134, 116, 192, 0.08), transparent 60%);
+  /* `background-attachment: fixed` removed — it forced the gradients to
+     re-paint on every scroll frame, which was a major source of jank. */
+}
+
+/* Paper grain texture — matches the journal page.
+   `mix-blend-mode: multiply` was removed: a full-viewport fixed blend layer
+   has to re-composite the whole screen on every scroll frame as images pass
+   beneath it. Without the blend mode this fixed layer stays on its own
+   compositor layer and costs almost nothing while scrolling. Opacity lowered
+   to keep photos from looking greyed now that it no longer multiplies. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.2 0 0 0 0 0.14 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/*  -  03 NAVBAR  - */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 2rem;
+  background: rgba(255, 253, 250, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.logo {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.logo::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--pink);
+  border-radius: 50%;
+  display: inline-block;
+}
+.logo em {
+  font-family: var(--font-accent);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--pink);
+  letter-spacing: 0;
+}
+.back-link {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 50px;
+  background: var(--paper);
+  transition: all 0.25s var(--ease-out);
+}
+.back-link:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.back-link .arrow {
+  transition: transform 0.25s ease;
+}
+.back-link:hover .arrow {
+  transform: translateX(-3px);
+}
+
+/*  -  04 GALLERY HERO  - */
+.gallery-hero {
+  padding: 5rem 2rem 3.5rem;
+  text-align: center;
+  position: relative;
+  background:
+    radial-gradient(ellipse 60% 70% at 28% 12%, rgba(200, 93, 115, 0.16), transparent 60%),
+    radial-gradient(ellipse 55% 70% at 78% 18%, rgba(134, 116, 192, 0.15), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 50% 100%, rgba(91, 139, 191, 0.10), transparent 65%);
+}
+.gallery-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--pink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+}
+.gallery-eyebrow::before,
+.gallery-eyebrow::after {
+  content: '';
+  width: 28px;
+  height: 1.5px;
+  background: var(--pink);
+}
+.gallery-hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.8rem, 6vw, 4.6rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin-bottom: 1.1rem;
+}
+.gallery-hero h1 em {
+  font-family: var(--font-accent);
+  font-weight: 400;
+  font-style: italic;
+  color: var(--pink);
+  letter-spacing: 0;
+}
+.gallery-hero p {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  color: var(--ink-soft);
+  margin: 0 auto;
+  line-height: 1.55;
+  font-weight: 400;
+}
+.gallery-meta {
+  margin-top: 1.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.gallery-meta strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/*  -  05 MASONRY GRID  - */
+.gallery-grid {
+  padding: 0.5rem 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-auto-rows: 6px;            /* small unit; items span N rows by aspect ratio */
+  grid-auto-flow: dense;          /* fill gaps left by tall items above */
+  gap: 0.75rem;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Items flow left-to-right in reading order (no gaps, no balanced columns).
+   Each item's `grid-row: span N` is set by JS based on the loaded image's
+   aspect ratio so the grid stays gap-free at any width. */
+@media (min-width: 1700px) { .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+@media (min-width: 2000px) { .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); } }
+@media (min-width: 2400px) { .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+@media (max-width: 1100px) { .gallery-grid { padding: 0.5rem 1.2rem 3rem; } }
+@media (max-width: 700px)  {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    padding: 0.5rem 0.8rem 3rem;
+  }
+}
+@media (max-width: 420px)  {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    padding: 0.5rem 0.7rem 2.5rem;
+  }
+}
+
+.gallery-item {
+  /* grid-row span is set dynamically per item by JS based on aspect ratio */
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  background: var(--bg-2);
+  box-shadow: 0 1px 3px rgba(74, 54, 40, 0.06);
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Skip rendering work for items scrolled off-screen. This is the single
+     biggest win on a long, image-heavy page: the browser only lays out and
+     paints tiles near the viewport. The explicit grid-row span (set by JS)
+     keeps the scrollbar accurate even for un-rendered items. */
+  content-visibility: auto;
+}
+.gallery-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -8px rgba(74, 54, 40, 0.22);
+  z-index: 2;
+}
+.gallery-item img,
+.gallery-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+  background: var(--bg-2);
+}
+.gallery-item:hover img,
+.gallery-item:hover video {
+  transform: scale(1.025);
+}
+.gallery-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 60%, rgba(74, 54, 40, 0.35));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.gallery-item:hover::after { opacity: 1; }
+
+/* Media fades in once it has actually loaded. Until then the tile shows a
+   soft shimmering placeholder so empty cells look intentional, not broken. */
+.gallery-item .media {
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+}
+.gallery-item .media.loaded { opacity: 1; }
+
+/* Placeholder shimmer — shown while a tile is unmounted or its media is still
+   loading. A tile only mounts its real image/video when it scrolls near the
+   viewport, so most tiles sit in this cheap state at any given moment. */
+.gallery-item.is-placeholder {
+  background-image: linear-gradient(
+    110deg,
+    var(--bg-2) 28%,
+    var(--line-soft) 50%,
+    var(--bg-2) 72%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { background-position: 120% 0; }
+  to   { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-item.is-placeholder { animation: none; }
+}
+
+/* Video badge — small pill in the top-left of any video item */
+.gallery-video-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(74, 54, 40, 0.78);
+  backdrop-filter: blur(6px);
+  color: var(--paper);
+  padding: 0.3rem 0.65rem;
+  border-radius: 50px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  text-transform: uppercase;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.gallery-video-badge::before {
+  content: '▶';
+  font-size: 0.55rem;
+  color: var(--lavender);
+}
+
+/*  -  06 FULLSCREEN MODAL  - */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 28, 22, 0.96);
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem 2rem;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+}
+.modal-overlay.open {
+  display: flex;
+  opacity: 1;
+  animation: modalIn 0.35s var(--ease-out);
+}
+@keyframes modalIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(254, 246, 239, 0.12);
+  border: 1px solid rgba(254, 246, 239, 0.18);
+  color: var(--paper);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s var(--ease-out);
+  z-index: 10;
+}
+.modal-close:hover {
+  background: var(--pink);
+  border-color: var(--pink);
+  transform: scale(1.08);
+}
+
+.modal-stage {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1500px;
+  height: 78vh;
+  min-height: 0;
+}
+.modal-stage img,
+.modal-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), 0 12px 28px rgba(0, 0, 0, 0.35);
+  display: block;
+  animation: imgIn 0.45s var(--ease-out);
+  background: #1a130f;
+}
+@keyframes imgIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1.8rem;
+  line-height: 1;
+  font-weight: 300;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.25s ease;
+  padding: 0 0 4px 0;
+}
+.modal-arrow:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-50%) scale(1.06);
+}
+.modal-prev { left: 1.5rem; padding: 0 3px 4px 0; }
+.modal-next { right: 1.5rem; padding: 0 0 4px 3px; }
+
+.modal-counter {
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(254, 246, 239, 0.55);
+  font-weight: 500;
+}
+
+/*  -  07 FOOTER  - */
+.gallery-footer {
+  border-top: 1px solid var(--line-soft);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.gallery-footer a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--pink);
+  padding-bottom: 1px;
+  transition: color 0.2s ease;
+}
+.gallery-footer a:hover { color: var(--pink); }
+.gallery-footer-row {
+  margin-bottom: 0.5rem;
+}
+
+/*  -  08 LOADING / EMPTY STATES  - */
+.gallery-loading {
+  padding: 6rem 2rem;
+  text-align: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+.gallery-loading::after {
+  content: '…';
+  animation: dots 1.4s infinite;
+}
+@keyframes dots {
+  0%, 20% { content: '·'; }
+  40%     { content: '··'; }
+  60%, 100% { content: '···'; }
+}
+
+.gallery-empty {
+  padding: 5rem 2rem 6rem;
+  text-align: center;
+  max-width: 540px;
+  margin: 0 auto;
+}
+.gallery-empty .icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+.gallery-empty h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.8rem;
+  letter-spacing: -0.015em;
+}
+.gallery-empty p {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 0.7rem;
+}
+.gallery-empty code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  background: var(--pink-pale);
+  color: var(--ink);
+  padding: 0.18rem 0.5rem;
+  border-radius: 4px;
+}
+
+/*  -  09 MOBILE RESPONSIVE  - */
+@media (max-width: 700px) {
+  .navbar { padding: 0.85rem 1.2rem; }
+  .logo { font-size: 1.35rem; }
+  .back-link { padding: 0.45rem 0.85rem; font-size: 0.78rem; }
+  .gallery-hero { padding: 3rem 1.5rem 2.2rem; }
+  .gallery-hero h1 { font-size: clamp(2.2rem, 8vw, 3rem); }
+  .gallery-hero p { font-size: 0.95rem; }
+  .modal-overlay { padding: 3rem 0.5rem 1rem; }
+  .modal-stage { height: 72vh; }
+  .modal-arrow { width: 38px; height: 38px; font-size: 1.5rem; }
+  .modal-prev { left: 0.5rem; }
+  .modal-next { right: 0.5rem; }
+  .modal-close { top: 0.85rem; right: 0.85rem; width: 38px; height: 38px; }
+}
+
+/* Touch device — disable hover transforms */
+@media (hover: none) {
+  .gallery-item:hover {
+    transform: none;
+    box-shadow: 0 1px 3px rgba(74, 54, 40, 0.06);
+  }
+  .gallery-item:hover img,
+  .gallery-item:hover video { transform: none; }
+  .gallery-item:hover::after { opacity: 0; }
+}
+
+/* ============================================================
+   Elevation layer — shared chrome with the journal page
+   ============================================================ */
+:root { --ease-spring: cubic-bezier(.34, 1.56, .64, 1); }
+
+h1, h2, h3, h4 { font-optical-sizing: auto; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pink-soft) transparent;
+}
+*::-webkit-scrollbar { width: 11px; height: 11px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--pink-soft);
+  border: 3px solid var(--bg);
+  border-radius: 20px;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--pink); }
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2.5px solid var(--pink);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+::selection { background: var(--pink-soft); color: var(--ink); }
+::-moz-selection { background: var(--pink-soft); color: var(--ink); }

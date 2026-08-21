@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siblings BookVerse</title>
+<meta name="description" content="Search millions of books, see what people are reading, and keep track of what we have read.">
+<link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://covers.openlibrary.org">
+<link rel="preconnect" href="https://books.google.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="modulepreload" href="js/pages/discover.js">
+</head>
+<body>
+
+<header class="topbar" data-nav></header>
+
+<section class="hero">
+  <div class="shell">
+   <div class="hero__main">
+     <div class="hero__lede">
+      <p class="hero__eyebrow">Three readers, one shelf</p>
+      <h1 class="hero__title">Find the next one, and <em>write it down</em>.</h1>
+      <p class="hero__sub">Search millions of books, see what the world is reading this week, and mark what we have finished — it goes straight into our sheet.</p>
+    </div>
+
+     <form class="searchbox" data-search-form role="search">
+      <svg class="searchbox__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></svg>
+      <input class="searchbox__input" data-search-input type="search" placeholder="A title, an author, an ISBN…" aria-label="Search for a book" autocomplete="off">
+      <span class="scopepick"><select data-scope aria-label="Search by"></select></span>
+      <button class="searchbox__go" type="submit">Search</button>
+    </form>
+
+      <div class="chiprow" data-subjects aria-label="Browse by subject"></div>
+   </div>
+  </div>
+</section>
+
+<main class="stage">
+  <div class="wide">
+    <div class="stage__head">
+      <div class="stage__bar">
+        <div class="stage__bar-l">
+          <h2 class="stage__title" data-headline>What people are reading</h2>
+          <button class="linkbtn" type="button" data-clear hidden>Back to trending</button>
+        </div>
+
+        <div class="pillrow" data-periods></div>
+
+        <div class="stage__bar-r">
+          <div class="refinewrap">
+            <button class="refinebtn" type="button" data-refine-toggle aria-expanded="false" aria-controls="refine-panel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+              <span>Refine</span>
+              <span class="refinebtn__count" data-refine-count hidden>0</span>
+              <span class="refinebtn__caret" aria-hidden="true"></span>
+            </button>
+
+            <div class="refine" id="refine-panel" data-refine hidden>
+              <label class="selectwrap"><span class="filters__label">Sort</span><select data-sort></select></label>
+              <label class="selectwrap"><span class="filters__label">Language</span><select data-language></select></label>
+              <label class="selectwrap"><span class="filters__label">Published</span><select data-era></select></label>
+              <label class="selectwrap"><span class="filters__label">Availability</span><select data-ebook></select></label>
+              <button class="linkbtn refine__reset" type="button" data-reset-filters hidden>Clear filters</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="stage__note" data-note hidden></p>
+    <div class="statusrow" data-status role="group" aria-label="Narrow these results by what our shelf says" hidden></div>
+
+    <div class="grid" data-grid></div>
+    <div class="more" data-more hidden>
+      <button class="btn btn--solid more__btn" type="button" data-more-btn>Load more</button>
+      <p class="more__note" data-more-note></p>
+    </div>
+  </div>
+</main>
+
+<section class="readers-section">
+  <div class="shell">
+    <div class="stage__head"><h2 class="stage__title">Our readers</h2></div>
+    <p class="stage__note">Tap a name to see only their books.</p>
+    <div class="readers" data-readers></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="shell footer__inner">
+    <p class="footer__text">BookVerse — our reading journey, kept in one spreadsheet.</p>
+    <div class="footer__links">
+      <a class="footer__link" href="https://www.instagram.com/sawant_sidhu/?hl=en" target="_blank" rel="noopener" title="Siddhesh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+      </a>
+      <a class="footer__link" href="https://www.instagram.com/pratiksha_sawant_/?hl=en" target="_blank" rel="noopener" title="Pratiksha">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+      </a>
+      <a class="footer__link" href="https://www.instagram.com/sawant.dhanashri.22.95/?hl=en" target="_blank" rel="noopener" title="Dhanashri">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="js/pages/discover.js"></script>
+</body>
+</html>

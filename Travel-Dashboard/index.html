@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SidTrails | A Travel Journal & Analytics Dashboard</title>
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/6213/6213814.png">
+
+  <!-- Fonts: editorial pairing -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Warm up the connections used by deferred scripts and early data fetches -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://docs.google.com">
+  <!-- Hosts used a bit later (map tiles, geocoding, hero/photo imagery) -->
+  <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
+  <link rel="dns-prefetch" href="https://tile.openstreetmap.org">
+  <link rel="dns-prefetch" href="https://images.unsplash.com">
+
+  <!-- Preload the hero background (the largest above-the-fold image) so it starts downloading immediately -->
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=2000&q=80"
+    fetchpriority="high">
+
+  <!-- Google: Fraunces (display serif), Inter (body), Caveat (handwritten), JetBrains Mono (labels) -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=DM+Sans:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <!-- Libraries -->
+  <!-- AOS controls the initial hidden state of reveal-on-scroll elements, so it stays render-blocking to avoid any flash. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" />
+  <!-- Leaflet + MarkerCluster CSS are only needed by the map (far below the fold), so load them without blocking first paint. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print"
+    onload="this.media='all'" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" media="print"
+    onload="this.media='all'" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    media="print" onload="this.media='all'" />
+  <noscript>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  </noscript>
+
+  <!-- Libraries load with `defer`: they download in parallel during parsing and execute,
+     in order, right before DOMContentLoaded (which is when the app boots) - so nothing
+     blocks the initial render but everything is ready when the app starts. -->
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+  <!-- EmailJS for the contact form. SDK v4. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+  <link rel="stylesheet" href="css js/index.css" />
+</head>
+
+<body>
+
+  <!-- Scroll trail progress bar -->
+  <div class="read-progress" aria-hidden="true"></div>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="#home" class="logo">
+        <span class="dot"></span>
+        Sid<em>Trails</em>
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#stats">Stats</a></li>
+        <li><a href="#places">Places</a></li>
+        <li><a href="#goals">Goals</a></li>
+        <li><a href="#activities">Activities</a></li>
+        <li><a href="#treks">Treks</a></li>
+        <li><a href="#monuments">Heritage</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="#wrapped">Journey</a></li>
+        <li><a href="#map-section">Map</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- DIAGNOSTIC PANEL (only shown if sheet fetch has issues) -->
+  <div class="diag-panel" id="diagPanel"></div>
+
+  <!-- HERO -->
+  <section class="hero" id="home">
+    <!-- Full-bleed background image -->
+    <div class="hero-bg" id="heroBg"></div>
+    <div class="hero-bg-overlay"></div>
+
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-text">
+          <span class="eyebrow">My personal travel journal</span>
+          <h1 class="hero-headline">
+            <span class="word">Every</span>
+            <span class="word">road</span>
+            <span class="word">tells</span>
+            <span class="word">a</span>
+            <span class="word">story.</span>
+          </h1>
+          <p class="hero-tagline">
+            A living travelogue stitched together from every mountain pass, monument, and midnight train. Stories,
+            photographs, and memories, collected, kept, retold.
+          </p>
+
+          <div class="hero-cta">
+            <a href="#stats" class="btn btn-primary">
+              See the journey <span class="arrow">↗</span>
+            </a>
+            <a href="#contact" class="btn btn-accent">
+              Travel with me <span class="arrow">↗</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Right side - angled fanned photo gallery -->
+        <div class="hero-visual" id="heroVisual">
+          <div class="hero-fan" id="heroFan">
+            <figure class="fan-card">
+              <img src="assets/Hero Images/1.webp" alt="" loading="eager" />
+            </figure>
+            <figure class="fan-card">
+              <img src="assets/Hero Images/2.webp" alt="" loading="lazy" />
+            </figure>
+            <figure class="fan-card">
+              <img src="assets/Hero Images/3.webp" alt="" loading="lazy" />
+            </figure>
+            <figure class="fan-card">
+              <img src="assets/Hero Images/4.webp" alt="" loading="lazy" />
+            </figure>
+          </div>
+
+          <!-- Floating stat card -->
+          <div class="hero-float-card" id="heroFloatCard">
+            <div class="hfc-label">Latest stamp</div>
+            <div class="hfc-value" id="hfcValue">-</div>
+            <div class="hfc-sub" id="hfcSub">in the journal</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS / ANALYTICS -->
+  <section id="stats">
+    <div class="container">
+      <div class="stats-inner">
+        <div class="kpi-grid" id="kpiGrid" data-aos="fade-up"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLACES -->
+  <section id="places">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Places and destinations</h2>
+          <p>Every place that left a mark: visited spots with photos and memories, and the wishlist still calling.</p>
+        </div>
+      </div>
+
+      <!-- Filters: status + search + type -->
+      <div class="places-tabs filter-bar" data-aos="fade-up">
+        <select id="placeStatusFilter" class="nice-select fb-status">
+          <option value="all">All places</option>
+        </select>
+        <div class="ptab-search fb-search">
+          <input type="text" id="placeSearch" class="ptab-search-input"
+            placeholder="Search places, states, people, memories…" />
+        </div>
+        <select id="placeTypeFilter" class="nice-select fb-type">
+          <option value="">All types</option>
+        </select>
+      </div>
+
+      <!-- VISITED block - image thumbnails -->
+      <div class="places-block" id="visitedBlock">
+        <div class="block-header">
+          <div class="block-tag visited-tag">
+            <span class="tag-dot"></span>
+            Visited · <span id="visitedCount">0</span> places
+          </div>
+          <p class="block-sub">A photo, a memory, the people I went with.</p>
+        </div>
+        <div class="visited-grid full-bleed" id="visitedGrid"></div>
+      </div>
+
+      <!-- Section divider -->
+      <div class="section-divider-line" id="divider">
+        <span class="divider-text">Still on the list</span>
+      </div>
+
+      <!-- WISHLIST block - text-only cards -->
+      <div class="places-block" id="wishlistBlock">
+        <div class="block-header">
+          <div class="block-tag wishlist-tag">
+            <span class="tag-dot"></span>
+            Wishlist · <span id="wishlistCount">0</span> places
+          </div>
+          <p class="block-sub">Destinations bookmarked for the next chapter.</p>
+        </div>
+        <div class="wishlist-grid full-bleed" id="wishlistGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GOALS - Bucket List, dark background -->
+  <section id="goals" class="goals-section">
+    <div class="goals-bg-shapes" aria-hidden="true">
+      <span class="g-shape g-shape-1"></span>
+      <span class="g-shape g-shape-2"></span>
+    </div>
+
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Bucket List</h2>
+          <p>Ambitions worth chasing: the places, experiences, and milestones that keep the wanderlust alive.</p>
+        </div>
+      </div>
+
+      <!-- Completion pill: floats to the section's top-right on desktop, and drops
+           into the flow below the intro (right-aligned) on mobile. -->
+      <div class="goals-stat-pill" id="goalsStatPill">
+        <div class="gsp-num" id="goalsCompletedPct">0%</div>
+        <div class="gsp-label">complete</div>
+      </div>
+
+      <!-- Featured journey strip (dynamic - shows the goal with most progress) -->
+      <div class="featured-journey" id="featuredJourney" data-aos="fade-up"></div>
+
+      <div class="goals-grid-new full-bleed" id="goalsGrid"></div>
+    </div>
+  </section>
+
+  <!-- ACTIVITIES -->
+  <section id="activities" class="activities-section">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Adventures</h2>
+          <p>Water, air, snow, land: what's been ticked off, what's still calling.</p>
+        </div>
+      </div>
+      <div class="activity-stats" id="activityStats" data-aos="fade-up"></div>
+      <div class="activity-grid full-bleed" id="activitiesGrid"></div>
+    </div>
+  </section>
+
+  <!-- TREKS - peaks, ridgelines & summits -->
+  <section id="treks" class="treks-section">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Treks &amp; Summits</h2>
+          <p>The climbs already conquered, and the ridgelines still waiting.</p>
+        </div>
+      </div>
+
+      <!-- Trek progress - a ridgeline that fills as treks get completed -->
+      <div class="trek-progress" id="trekProgress" data-aos="fade-up"></div>
+
+      <!-- Filters: status + search + region -->
+      <div class="trek-tabs filter-bar" data-aos="fade-up">
+        <select id="trekStatusFilter" class="nice-select ns-green fb-status">
+          <option value="all">All treks</option>
+        </select>
+        <div class="trek-search fb-search">
+          <input type="text" id="trekSearch" class="trek-search-input"
+            placeholder="Search treks, peaks, states, highlights…" />
+        </div>
+        <select id="trekRegionFilter" class="nice-select ns-green fb-type">
+          <option value="all">All regions</option>
+        </select>
+      </div>
+
+      <!-- Every trek in one grid - completed ones carry a green border + tint,
+           so the two states read as one family instead of two blocks -->
+      <div class="trek-grid full-bleed" id="trekGrid"></div>
+    </div>
+  </section>
+
+  <!-- MONUMENTS & LANDMARKS -->
+  <section id="monuments" class="monuments-section">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Monuments &amp; Landmarks</h2>
+          <p>The temples, palaces, monuments, and landmarks that hold history, faith, and architecture worth seeing in
+            person.</p>
+        </div>
+      </div>
+
+      <!-- Tab switcher (Visited / On the list) + region dropdown -->
+      <div class="mon-tabs" data-aos="fade-up">
+        <button class="mtab active" data-mtab="visited">
+          <span class="mtab-dot visited"></span>
+          Visited
+          <span class="mtab-count" id="monVisitedCount">0</span>
+        </button>
+        <button class="mtab" data-mtab="wishlist">
+          <span class="mtab-dot wishlist"></span>
+          On the list
+          <span class="mtab-count" id="monWishlistCount">0</span>
+        </button>
+        <select id="monRegionFilter" class="nice-select mon-region-select">
+          <option value="all">All regions</option>
+        </select>
+      </div>
+
+      <!-- Visited monuments table -->
+      <div class="mon-block full-bleed" id="monVisitedBlock">
+        <div class="mon-table-wrap">
+          <table class="mon-table">
+            <thead>
+              <tr>
+                <th>Monument / Landmark</th>
+                <th>Place</th>
+                <th>Region</th>
+                <th>Famous For</th>
+                <th>Visited</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="monVisitedBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Wishlist monuments table -->
+      <div class="mon-block full-bleed" id="monWishlistBlock" hidden>
+        <div class="mon-table-wrap">
+          <table class="mon-table">
+            <thead>
+              <tr>
+                <th>Monument / Landmark</th>
+                <th>Place</th>
+                <th>Region</th>
+                <th>Famous For</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="monWishlistBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" class="contact-section">
+    <div class="container">
+      <div class="contact-wrap-grid" data-aos="fade-up">
+        <div class="contact-left">
+          <span class="contact-eyebrow">Let's plan something</span>
+          <h2>Reach out if you wanna travel with me.</h2>
+          <p class="contact-blurb">Got a road trip in mind? A trek you've been planning? A monsoon getaway? Drop a
+            postcard. I'm always up for a new stamp on the journal.</p>
+
+          <div class="vibe-line">
+            <span class="vibe-icon">✦</span>
+            <span>Adventure is always a yes.</span>
+          </div>
+
+          <ul class="contact-perks">
+            <li>
+              <span class="perk-icon">🗓️</span>
+              <div>
+                <strong>Open to weekends &amp; week-long trips</strong>
+                <span>Short escapes or long itineraries, both work.</span>
+              </div>
+            </li>
+            <li>
+              <span class="perk-icon">🤝</span>
+              <div>
+                <strong>Split costs, share the driving</strong>
+                <span>Easy logistics, fair contributions.</span>
+              </div>
+            </li>
+            <li>
+              <span class="perk-icon">📷</span>
+              <div>
+                <strong>The trip lives on here</strong>
+                <span>Photos, memories, and a fresh pin on the map.</span>
+              </div>
+            </li>
+          </ul>
+
+          <div class="contact-signoff">
+            <span class="signoff-line"></span>
+            <span class="signoff-text">Sid</span>
+          </div>
+        </div>
+
+        <form id="contactForm" class="contact-form-card">
+          <div class="form-header">
+            <h3 class="form-title">Send a postcard</h3>
+            <p class="form-sub">Tell me a little about your trip idea, and I'll get back to you soon.</p>
+          </div>
+
+          <div class="form-group">
+            <label>Your name</label>
+            <input type="text" class="form-control" name="from_name" placeholder="What should I call you?" required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Where to?</label>
+              <input type="text" class="form-control" name="destination"
+                placeholder="Manali · Spiti · Hampi · anywhere" />
+            </div>
+            <div class="form-group">
+              <label>Trip type</label>
+              <select class="form-control" name="trip_type">
+                <option>Mountains</option>
+                <option>Beach</option>
+                <option>Heritage</option>
+                <option>Spiritual</option>
+                <option>Road trip</option>
+                <option>Backpacking</option>
+                <option>Surprise me</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>A little about the trip</label>
+            <textarea class="form-control" name="message"
+              placeholder="Dates, vibe, who's coming, anything you want to share." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>How can I reach you?</label>
+            <input type="text" class="form-control" name="contact_info"
+              placeholder="Phone, email, Instagram handle, whatever works" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary postcard-btn" id="contactSubmit">
+            <span class="btn-label">Send the postcard</span>
+            <span class="arrow">→</span>
+          </button>
+
+          <div class="form-status" id="formStatus" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRAVELOGUE - "The journey, in numbers" (Wrapped) -->
+  <section id="wrapped">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Journey in numbers</h2>
+          <p>Everything the road has added up to so far: the company, the styles, the corners of the map, and how much
+            of the list is ticked off.</p>
+        </div>
+      </div>
+
+      <div class="tw-bento" id="twBento" data-aos="fade-up"></div>
+    </div>
+  </section>
+
+  <!-- MAP - Now at the end -->
+  <section id="map-section" class="map-section">
+    <div class="container">
+      <div class="section-head" data-aos="fade-up">
+        <div class="title-block">
+          <h2>Pins on World</h2>
+          <p>Places, monuments, and activities. Every dot is a memory waiting to be retold.</p>
+        </div>
+      </div>
+      <div class="map-wrap" data-aos="fade-up">
+        <div id="map"></div>
+        <div class="map-legend">
+          <div class="item"><span class="dot place"></span> Places</div>
+          <div class="item"><span class="dot monument"></span> Monuments</div>
+          <div class="item"><span class="dot activity"></span> Activities</div>
+          <div class="item"><span class="dot trek"></span> Treks</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <!-- Big quote band -->
+      <div class="footer-quote">
+        <p>The world is a book, and those who do not travel read only one page.</p>
+        <span class="quote-author">— Saint Augustine</span>
+      </div>
+
+      <!-- Main row: gallery feature (left) + connect & stats (right) -->
+      <div class="footer-main">
+        <!-- Featured: Gallery card -->
+        <a href="gallery.html" target="_blank" rel="noopener" class="footer-gallery-card">
+          <div class="fgc-left">
+            <div class="fgc-eyebrow">A personal album</div>
+            <h3 class="fgc-title">The <em>gallery</em>.</h3>
+            <p class="fgc-sub">Glimpses from the road: every photo, every video, in one place.</p>
+          </div>
+          <div class="fgc-right">
+            <div class="fgc-frames">
+              <span class="fgc-frame f1"></span>
+              <span class="fgc-frame f2"></span>
+              <span class="fgc-frame f3"></span>
+            </div>
+            <div class="fgc-cta">
+              <span>Open gallery</span>
+              <span class="fgc-arrow">↗</span>
+            </div>
+          </div>
+        </a>
+
+        <!-- Connect -->
+        <div class="footer-col footer-connect">
+          <h5>Connect</h5>
+          <div class="footer-socials">
+            <a href="https://www.instagram.com/sawant_sidhu/" target="_blank" rel="noopener"
+              class="social-link social-ig" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+              </svg>
+              <span>Instagram</span>
+            </a>
+            <a href="https://www.youtube.com/@laxmansawant19" target="_blank" rel="noopener"
+              class="social-link social-yt" aria-label="YouTube">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+              </svg>
+              <span>YouTube</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Journal so far -->
+        <div class="footer-col footer-stats">
+          <h5>The journal so far</h5>
+          <div class="footer-mini-stats" id="footerMiniStats">
+            <div class="fms-row"><span data-stat="places">-</span><label>places visited</label></div>
+            <div class="fms-row"><span data-stat="states">-</span><label>Indian states</label></div>
+            <div class="fms-row"><span data-stat="monuments">-</span><label>monuments seen</label></div>
+            <div class="fms-row"><span data-stat="treks">-</span><label>treks summited</label></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="footer-bottom">
+        <div class="footer-bottom-left">
+          <span>© <span id="year"></span> SidTrails</span>
+          <span class="dot-sep">·</span>
+          <span>Built for the love of the road</span>
+        </div>
+        <div class="footer-bottom-right">
+          Made with
+          <span class="footer-heart">♥</span>
+          by ME
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <button class="modal-close" id="modalClose">×</button>
+      <div class="modal-header" id="modalHeader"></div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- PHOTO MODAL - fullscreen single-image viewer -->
+  <div class="act-modal-overlay" id="actModal" role="dialog" aria-modal="true">
+    <button class="act-modal-close" id="actModalClose" aria-label="Close">×</button>
+    <button class="act-modal-nav prev" id="actModalPrev" type="button" aria-label="Previous" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+    <button class="act-modal-nav next" id="actModalNext" type="button" aria-label="Next" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+    <span class="am-counter" id="actModalCounter" hidden></span>
+    <div class="act-modal-stage">
+      <img id="actModalImg" alt="" decoding="async" />
+      <div class="act-modal-no-img" id="actModalNoImg">
+        <span class="no-img-icon">📷</span>
+        <p>No photo yet</p>
+      </div>
+    </div>
+    <div class="act-modal-info">
+      <div class="am-title-row">
+        <h3 id="actModalTitle">Activity</h3>
+        <div id="actModalStatus"></div>
+      </div>
+      <div class="act-modal-meta" id="actModalMeta"></div>
+      <div id="actModalExtra"></div>
+    </div>
+  </div>
+
+  <!-- LOADING BANNER -->
+  <div class="loading-banner" id="loadingBanner">
+    <span class="spin"></span>
+    <span id="loadingText">Preparing my travel journal…</span>
+  </div>
+
+  <!-- Application script will be appended here -->
+  <script id="appScript" src="css js/index.js"></script>
+
+</body>
+
+</html>

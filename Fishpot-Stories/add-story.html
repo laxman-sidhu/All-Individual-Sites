@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share Your Story • Fishpot Stories</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/add_story.css">
+</head>
+
+<body class="add-page">
+    <header class="site-header">
+        <a href="index.html" class="brand">
+            <span class="brand-icon">📖</span>
+            Fishpot Stories
+        </a>
+        <nav class="site-nav">
+            <a href="index.html">Home</a>
+            <a href="add-story.html" class="active">Add Story</a>
+        </nav>
+    </header>
+
+    <main class="add-wrapper">
+        <header class="add-page-header">
+            <p class="kicker">Add Story</p>
+            <h1>Share your story with the world</h1>
+        </header>
+        <section class="form-card">
+            <h2 class="sr-only">Story details</h2>
+            <form id="add-story-form">
+                <label>
+                    Your name *
+                    <input type="text" id="author_name" name="author_name" placeholder="e.g. Aditi Sharma" required>
+                </label>
+                <label>
+                    Story title *
+                    <input type="text" id="title" name="title" placeholder="Give your story a strong headline"
+                        required>
+                </label>
+                <label>
+                    Short description *
+                    <textarea id="description" name="description" rows="3"
+                        placeholder="One paragraph summary of your story" required></textarea>
+                </label>
+                <label>
+                    Thumbnail image URL (optional)
+                    <input type="url" id="thumbnail_url" name="thumbnail_url"
+                        placeholder="https://example.com/your-image.jpg">
+                    <span class="field-hint">This image will be used as the thumbnail for this story.</span>
+                </label>
+                <div class="editor-field">
+                    <span class="editor-label">Full story *</span>
+                    <div id="editor-toolbar" class="editor-toolbar" role="toolbar" aria-label="Formatting">
+                        <button type="button" data-command="bold" title="Bold"><b>B</b></button>
+                        <button type="button" data-command="italic" title="Italic"><i>I</i></button>
+                        <button type="button" data-command="underline" title="Underline"><u>U</u></button>
+                        <button type="button" data-command="insertUnorderedList" title="Bullet list">• List</button>
+                        <button type="button" data-command="insertOrderedList" title="Numbered list">1. List</button>
+                        <button type="button" data-command="formatBlock" data-value="h2" title="Heading">H</button>
+                    </div>
+                    <div id="full-story-editor" class="rich-editor" contenteditable="true"
+                        data-placeholder="Write your full story here..." role="textbox" aria-multiline="true"
+                        aria-label="Full story"></div>
+                </div>
+                <button type="submit" class="btn primary full-width">Publish story 🚀</button>
+                <div id="add-message"></div>
+            </form>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>
+            Koi madad chahiye? Feel free to contact us.
+            <a href="#" id="contact-link" data-video="assets/chal_bhosdike.mp4">
+                Email the team
+            </a>
+        </p>
+    </footer>
+
+    <div id="contact-popup" class="contact-popup" aria-hidden="true">
+        <div class="contact-popup__backdrop"></div>
+        <div class="contact-popup__dialog">
+            <button type="button" id="contact-popup-close" class="contact-popup__close">&times;</button>
+            <video id="contact-popup-video" class="contact-popup__video" playsinline controls preload="none"></video>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/sheets.js"></script>
+    <script src="js/base.js"></script>
+    <script defer src="js/add_story.js"></script>
+</body>
+
+</html>

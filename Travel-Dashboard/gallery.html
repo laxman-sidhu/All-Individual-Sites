@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gallery — SidTrails</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css js/gallery.css">
+</head>
+<body>
+
+<!----------------------------------------------------------------------------
+     NAVBAR
+    ---------------------------------------------------------------------------->
+<nav class="navbar">
+  <a href="index.html" class="logo">Sid<em>Trails</em></a>
+  <a href="index.html" class="back-link">
+    <span class="arrow">←</span> Back to the journal
+  </a>
+</nav>
+
+<!----------------------------------------------------------------------------
+     HERO
+    ---------------------------------------------------------------------------->
+<section class="gallery-hero">
+  <div class="gallery-eyebrow">A personal album</div>
+  <h1>The <em>gallery</em>.</h1>
+  <p>The road keeps moving, but the memories stay captured in photos.</p>
+  <div class="gallery-meta" id="galleryMeta" hidden>
+    <span id="itemCount"><strong>0</strong> items</span>
+  </div>
+</section>
+
+<!----------------------------------------------------------------------------
+     LOADING / GRID / EMPTY STATE
+    ---------------------------------------------------------------------------->
+<div class="gallery-loading" id="galleryLoading">Loading the album</div>
+
+<main class="gallery-grid" id="galleryGrid" hidden></main>
+
+<div class="gallery-empty" id="galleryEmpty" hidden>
+  <div class="icon">📷</div>
+  <h3>The album's empty for now.</h3>
+  <p>Add photos and videos to the <code>assets/Gallery/</code> folder and refresh this page.</p>
+  <p>Supported: <code>.jpg .jpeg .png .gif .webp .avif</code> · <code>.mp4 .webm .mov .m4v</code></p>
+</div>
+
+<!----------------------------------------------------------------------------
+     FULLSCREEN MODAL
+    ---------------------------------------------------------------------------->
+<div class="modal-overlay" id="modal" role="dialog" aria-modal="true">
+  <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+  <button class="modal-arrow modal-prev" id="modalPrev" aria-label="Previous">‹</button>
+  <button class="modal-arrow modal-next" id="modalNext" aria-label="Next">›</button>
+  <div class="modal-stage" id="modalStage"></div>
+  <div class="modal-counter" id="modalCounter"></div>
+</div>
+
+<!----------------------------------------------------------------------------
+     FOOTER
+    ---------------------------------------------------------------------------->
+<footer class="gallery-footer">
+  <div class="gallery-footer-row">
+    <a href="index.html">← Return to the travel journal</a>
+  </div>
+  <div>© 2026 SidTrails · Made with ♥ by ME</div>
+</footer>
+
+<script src="css js/gallery.js"></script>
+
+</body>
+</html>

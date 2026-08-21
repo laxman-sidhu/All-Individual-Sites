@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library — BookVerse</title>
+<meta name="description" content="Every book we have read, with who read it.">
+<link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://covers.openlibrary.org">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="modulepreload" href="js/pages/collection.js">
+</head>
+<body class="page-collection">
+
+<header class="topbar" data-nav></header>
+
+<section class="collhead">
+  <div class="shell">
+    <p class="collhead__eyebrow" data-eyebrow>Our shelves</p>
+    <h1 class="collhead__title" data-title>Every book we have read</h1>
+    <p class="collhead__lead" data-lead>One card per book. The faces on a cover are the ones who finished it.</p>
+    <div class="tiles" data-tiles></div>
+  </div>
+</section>
+
+<main class="stage">
+  <div class="wide">
+    <div class="collbar">
+      <label class="collbar__search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></svg>
+        <input type="search" data-collection-search placeholder="Search these books" aria-label="Search this collection" autocomplete="off">
+      </label>
+      <span class="selectwrap"><select data-reader aria-label="Reader"></select></span>
+      <span class="selectwrap"><select data-genre aria-label="Shelf"></select></span>
+      <span class="selectwrap"><select data-sort aria-label="Sort by"></select></span>
+      <span class="collcount" data-count></span>
+    </div>
+
+    <div class="grid" data-grid></div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="shell footer__inner">
+    <p class="footer__text">BookVerse — our reading journey, kept in one spreadsheet.</p>
+  </div>
+</footer>
+
+<script>window.PAGE_CONFIG = { source: "library", views: true };</script>
+<script type="module" src="js/pages/collection.js"></script>
+</body>
+</html>

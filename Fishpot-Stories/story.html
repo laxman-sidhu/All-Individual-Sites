@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story • Fishpot Stories</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/story.css">
+</head>
+
+<body class="story-page">
+    <header class="site-header">
+        <a href="index.html" class="brand">
+            <span class="brand-icon">📖</span>
+            Fishpot Stories
+        </a>
+        <nav class="site-nav">
+            <a href="index.html">Home</a>
+            <a href="add-story.html">Add Story</a>
+        </nav>
+    </header>
+
+    <main class="story-main">
+        <article id="story-detail" class="story-detail">
+            <div class="loading-panel">
+                <div class="spinner"></div>
+                <p>Loading story...</p>
+            </div>
+        </article>
+    </main>
+
+    <footer class="site-footer">
+        <p>
+            Didn't like the story? Go tell the writer so... 😏 •
+            <a href="#" id="contact-link" data-video="assets/chal_hatt.mp4">
+                Go on, tell them
+            </a>
+        </p>
+    </footer>
+
+    <div id="contact-popup" class="contact-popup" aria-hidden="true">
+        <div class="contact-popup__backdrop"></div>
+        <div class="contact-popup__dialog" role="dialog" aria-modal="true">
+            <button type="button" id="contact-popup-close" class="contact-popup__close"
+                aria-label="Close popup">&times;</button>
+            <video id="contact-popup-video" class="contact-popup__video" playsinline controls preload="none"></video>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/sheets.js"></script>
+    <script src="js/base.js"></script>
+    <script defer src="js/story.js"></script>
+</body>
+
+</html>

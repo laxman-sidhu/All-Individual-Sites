@@ -1,0 +1,158 @@
+.add-page main.add-wrapper {
+    padding-top: clamp(20px, 3vw, 36px);
+    padding-left: clamp(12px, 3vw, 24px);
+    padding-right: clamp(12px, 3vw, 24px);
+    width: var(--width-page-mobile);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@media (min-width: 769px) {
+    .add-page main.add-wrapper {
+        width: var(--width-add-story);
+    }
+}
+
+.add-page-header {
+    text-align: center;
+    margin: 0 auto 14px;
+    max-width: 560px;
+    padding: 0 8px;
+}
+
+.add-page-header .kicker {
+    margin-bottom: 6px;
+}
+
+.add-page-header h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.65rem, 3.5vw, 2.35rem);
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--purple-dark) 0%, var(--purple) 45%, var(--pink) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+    position: relative;
+    display: inline-block;
+}
+
+.add-page-header h1::after {
+    content: "";
+    display: block;
+    width: 48px;
+    height: 3px;
+    margin: 10px auto 0;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(90deg, var(--purple), var(--pink));
+}
+
+.form-card {
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 20px;
+    padding: clamp(22px, 4vw, 36px);
+    border: 1px solid rgba(108, 99, 255, 0.12);
+    box-shadow: var(--shadow-card);
+    width: 100%;
+    margin-top: -2vw;
+}
+
+#add-story-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#add-message:empty {
+    display: none;
+}
+
+textarea {
+    min-height: 96px;
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.editor-label {
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text-dark);
+}
+
+.editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(248, 247, 255, 0.95);
+    border: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+}
+
+.editor-toolbar button {
+    border: 1px solid rgba(108, 99, 255, 0.22);
+    border-radius: 8px;
+    padding: 6px 12px;
+    background: white;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-dark);
+    font-size: 0.85rem;
+}
+
+.editor-toolbar button:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+}
+
+.rich-editor {
+    min-height: 180px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 0 0 12px 12px;
+    background: white;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-y: auto;
+}
+
+.rich-editor:focus {
+    outline: none;
+    border-color: var(--purple);
+    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.2);
+}
+
+.rich-editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.form-card .btn.primary {
+    margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+    .add-page-header h1 {
+        font-size: clamp(1.45rem, 5vw, 1.85rem);
+    }
+
+    .add-page-header h1::after {
+        width: 40px;
+        margin-top: 8px;
+    }
+
+    .form-card {
+        padding: 18px 16px;
+        border-radius: 16px;
+    }
+}
+

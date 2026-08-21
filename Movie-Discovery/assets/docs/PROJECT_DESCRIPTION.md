@@ -1,0 +1,462 @@
+# Project description
+
+## What this is
+
+A static site that searches TMDB for films and web series and cross-references everything against a personal Google Sheet of what has already been watched.
+
+Plain HTML, CSS and JavaScript. No server, no framework, no build step. It runs on GitHub Pages. The only thing behind it is one Apps Script web app deployed from inside the spreadsheet, which reads the sheet and writes to it.
+
+| Page | What it is |
+|---|---|
+| `index.html` | Search and browse |
+| `watched.html` | The library, with All / Favourites / Must watch |
+| `watchlist.html` | The queue |
+
+---
+
+## Layout
+
+```
+css/style.css              one stylesheet for all three pages
+js/config.js               every credential and constant
+
+js/core/
+    util.js                escaping, text normalisation, storage, helpers
+    cache.js               TTL cache over memory plus sessionStorage
+    http.js                fetch with retry, backoff and timeout
+
+js/data/
+    sheets.js              fetch the three tabs, map columns by header name
+    snapshot.js            the last known sheet, in localStorage
+    identity.js            what counts as "the same title"
+    watched.js             All Watched, indexed
+    watchlist.js           Watchlist, same shape
+    people.js              People tab: spelling correction and autocomplete
+    writer.js              the ONLY module that writes
+    auth.js                who may press the write buttons
+
+js/tmdb/
+    client.js              auth, caching, genres, languages, name scoring
+    queries.js             discover, search, credits, details, feeds
+    execute.js             intent to endpoint, plus the result headline
+
+js/search/
+    scope.js               the "Search by" vocabulary
+    intent.js              the offline parser
+    gemini.js              phrase to intent for natural language
+    rewrite.js             re-wording a phrase when the media toggle flips
+    search.js              the correction ladder
+    filters.js             the browse panel
+
+js/ui/
+    nav.js                 the shared navbar, the theme and reload buttons
+    picker.js              the option list, drawn rather than left to the browser
+    cards.js               card markup
+    cardactions.js         the action bar on every card
+    actions.js             the gate, the mark-watched dialog, write calls
+    detail.js              the title modal, shared by all pages
+    sections.js            released / upcoming / related
+    toast.js               pending, success and failure feedback
+    portrait.js            the footer photograph
+
+js/pages/
+    search.js              index.html
+    collection.js          BOTH watched.html and watchlist.html
+
+assets/apps_script/        SidCinema_Bridge.gs, the read/write bridge
+assets/images/             the favicon and the two portraits
+assets/tests/              nine Node suites, seven with no dependencies
+assets/docs/               this file, SETUP.md and DEBUGGING.md
+```
+
+The root holds four things and nothing else: the three HTML pages, `css/`, `js/` and `assets/`. Anything not served to a visitor on every page load lives under `assets/`.
+
+`collection.js` is one controller driven by `window.PAGE_CONFIG` set in each page: wording, and `views: true` for the library only. **Don't fork it into two files** — the two pages differ in their source and their wording, not in their behaviour.
+
+**Dependencies flow one way only.** `js/ui` may import from `js/data` and `js/tmdb`; those never import from `js/ui`. Nothing outside `js/data/writer.js` writes to the sheet.
+
+---
+
+## The data source
+
+One Google Sheet, three tabs. `SHEET_ID` and the gids are in `js/config.js`.
+
+Columns are found by **header name, never by position**. This is load-bearing, not stylistic: All Watched has an unnamed spacer column and columns get moved by hand. Both sides do this independently — the alias tables in `js/data/sheets.js` and `COLUMN_ALIASES` in the bridge.
+
+A header can therefore be renamed without touching any code, as long as the new spelling is already in the alias list. Watchlist's title column was `Movie` and is now `Name`; both are aliases of the same field, so both read identically and neither the wire protocol nor the write path notices — `writer.js` sends canonical field names (`name`, `og_title`, `tmdb_id`) and the bridge resolves them against whatever the header row says. Two tests pin that.
+
+**Where two columns name the same field, the first one wins, on both sides.** This is the case a rename creates: add `Name`, forget to delete `Movie`, and the tab has two title columns. The bridge's `columnMap()` always kept the first; the site kept the *last*, because its guard was written per-column-index and `shapeRows` assigns in column order, so the later cell overwrote the earlier. The site then read the title out of one cell while the bridge matched and wrote against another, with no error on either side. First-wins on both sides is the only version where the two agree about which cell is the title.
+
+### Industry and Type
+
+`Industry` does two jobs on All Watched. It decides the media type (`Web Series` means series, everything else means film) and it is the category the library groups by. Never hardcoded: whatever the column says is what gets counted.
+
+The Watchlist splits those two jobs across two columns, because it now carries both. `Type` says film-versus-series; `Industry` is the category the page groups by. They were one column for as long as the tab had one, and `type` was an alias of the industry field so that either spelling read the same — which is exactly what broke when the tab gained the second column. Columns are matched in header order and the *first* one naming a field wins, `Type` sits left of `Industry`, so `Type` claimed the industry field and the real `Industry` column was never read at all. The industry dropdown filled with `Movie` and `Web Series`, which was not a bug in the dropdown: it was reading the only column the mapper had given it.
+
+`Type` is its own canonical field on both sides now, and `type` is gone from the industry alias list. A blank `Type` still falls back to `Industry`, or every series queued before the column existed would read back as a film.
+
+### How reads happen
+
+Reads go to the Apps Script bridge, **one request for all three tabs**. Three separate requests would each pay the script's cold start, which is the slowest part of a first load. If the bridge is unreachable, `js/data/sheets.js` falls back to Google's gviz endpoint by JSONP, which needs no deployment but does go through Google's few-minute cache.
+
+Reading through Apps Script rather than a published CSV is a change from the Flask version, and an improvement. A published CSV is cached by Google for minutes, so a write was invisible until the cache expired. The bridge reads the live sheet, so a change is there on the next load.
+
+---
+
+## Identity: what counts as the same title
+
+**Identity is the TMDB id, _or_ the title and the year together.** `js/data/identity.js` holds the only definition and both libraries use it.
+
+A TMDB id alone was the whole identity once, and it is not enough: TMDB holds some films twice. *Ved* (2022) sits in the sheet as `1037690` and comes back from search as `913544` — same film, same poster path, two records. The sheet said "not here" about a row that was, so the card showed no watchlist state and the click appended a second row. One film, two rows, neither aware of the other.
+
+**The year is load-bearing, not decoration.** Indexing by title alone is a bug this project already fixed once: one watched *The Call* marked every other film of that name as watched. Title *and* year is specific enough that a collision means two different films released the same year under the same name. The bare title survives in exactly one place — a row with no year at all is filed under the loose key and only ever reachable by it, so a row that *has* a year is never matched across years.
+
+The cost is stated rather than hidden: two genuinely different films sharing a title and a release year are now one title. The sheet carries nothing else to tell them apart with.
+
+**Media type is part of the match, and "unknown" is a real answer.** TMDB's movie and TV id sequences are separate and both start at 1, so low ids collide constantly — *The Lord of the Rings* is 120, 121 and 122. A watched series holding 122 used to hide the queued film 122 from the watchlist page, with no error anywhere. But a blank `Industry` cell genuinely says nothing, and rows the site adds from search often have one, because a TMDB result carries no industry to copy. So `mediaOf()` answers `""` for a blank cell and `""` matches either kind, while `mediaForIndustry()` keeps defaulting to `movie` for *display*, where a value is required. Two functions because they answer two different questions.
+
+**Queuing writes `Type`, always, and `Industry` never.** A film used to write a blank, and a blank is a real answer — `mediaOf()` reads it as unknown, which matches either kind — so every queued film was a row that declined to say what it was. `Industry` is left alone because TMDB cannot fill it: it knows a production country, not whether something belongs under Bollywood. That is the same reason the mark-watched dialog asks rather than guesses.
+
+**The id on the card is not always the id in the sheet.** `annotate()` sets `sheet_id` and `watchlist_id` to the id of the row that is actually there, and every write addresses that one — otherwise a flag write asks the bridge to edit a row that was never created. The title and year ride along with every write as the fallback the bridge matches on when the id misses.
+
+**Removing takes every row for a title, not the first.** A duplicate that predates this has to leave with the row that was clicked, or it comes straight back on the next load. Both `js/data/watchlist.js` and the bridge do this.
+
+**A re-watch is one title.** The library and the stats both de-duplicate on identity, so the per-industry buckets sum to the totals rather than exceeding them.
+
+The page therefore counts **distinct titles** and the sheet counts **rows**, and the two are allowed to differ. That difference used to be completely silent: 1,042 titles against 1,043 rows, Bollywood one short of its own column, no message and nothing to search for. `firstSeen()` now takes an `onCollapse` callback, `stats()` carries `duplicates` and `distinct`, and `?dupes=1` on the library page lists every collapse — see [DEBUGGING.md](DEBUGGING.md#dupes1-on-watchedhtml).
+
+**Title normalisation is unicode-aware, and had to be.** It used `\w`, which is ASCII-only, so every character of a Devanagari, Korean or Japanese title became a space and the whole title normalised to the empty string — meaning any row with a non-Latin title and no TMDB id was never indexed and was invisible to title matching. It is `[^\p{L}\p{N}\s]` with the `/u` flag now. The flag is not optional; without it `\p{...}` is not a character class at all.
+
+---
+
+## Writing back
+
+`js/data/writer.js` is the only module that changes the sheet. Two rules it holds to:
+
+1. **Google first, memory second.** A failed remote write changes nothing locally; the reverse order would display changes that were never saved. Covered by a test.
+2. **Update memory, don't re-download.** Every confirmed write is applied to the in-memory copy via `applyAdd`, `applyFlags` or `applyRemove`. Re-reading would work now that reads are live, but a round trip per click is slower and buys nothing.
+
+Marking something watched appends to All Watched and deletes from Watchlist in **one** Apps Script call. Two calls can half-fail and leave a title in both. Also covered by a test.
+
+**The duplicate check exists twice, on purpose.** `applyAdd` refuses in memory and the bridge refuses at the sheet. The memory half keeps the screen honest between a click and its write; the sheet half is the one that actually holds, because it is the only side a second device or a hand edit goes through.
+
+**Marking watched asks for Industry and then Genre, in that order and numbered.** Neither can be guessed: TMDB knows a film's production country, not whether it belongs under Bollywood or Other Language, and its genre list rarely matches the single word the owner would pick. The two are a sequence, not a pair — the genre list is rebuilt from the rows already under the chosen industry, so picking Hollywood offers the genres Hollywood rows actually use rather than all forty in the sheet. A brand new industry has no rows yet, so that case falls back to the full list rather than offering nothing. **"+ Add new…" is always last**, so no value is unreachable. Both lists come from the sheet's own contents, so an industry typed in by hand appears next time with no code change.
+
+**Queuing a title writes its genre too**, fetching one from TMDB if the card arrived without one. The watchlist page groups by that column and nothing later fills a blank one in.
+
+**Both `Name` and `Original Title` get TMDB's English title.** TMDB's `original_title` field is the title in the film's own script, so marking a Hindi film watched wrote `सपूत` into the sheet where `Sapoot` was wanted. That column is read back for title matching and typed into by hand, and neither works in a script the owner does not type in. Nothing is lost: the detail modal shows the native title live from TMDB whenever it differs.
+
+---
+
+## Who may write
+
+`js/data/auth.js` holds one shared password and a signed-expiry session in localStorage. Every write goes through `withOwner` in `js/ui/actions.js`.
+
+This runs in the browser, so it is a **convenience and not a security boundary**. It stops an accidental click and a casual visitor. The thing that actually protects the sheet is `APPS_SCRIPT_TOKEN`, which the bridge checks before it touches a cell. That token is in `js/config.js` and therefore public; that was a deliberate choice for a personal project, and [SETUP.md](SETUP.md#about-the-keys) spells out what it exposes and how to close it.
+
+**Fails closed.** With `APPS_SCRIPT_URL` or `OWNER_PASSWORD` unset the site is read-only and the buttons say so rather than failing silently.
+
+**The gate UX:** a visitor who clicks a write button gets *"This is Laxman's film diary"* with **Yes, I'm Laxman** / **No, go back**. The password field only appears after Yes. A bare password prompt on someone else's site reads as a wall; the sentence reads as an answer. Whatever was clicked replays after signing in.
+
+---
+
+## Search
+
+The **"Search by"** control is what makes this work. Without it, one phrase had to answer two questions at once: what is being looked for, and what kind of thing it is. A wrong guess sent the query to the wrong endpoint — *The Call* went to `/search/person` because someone on TMDB is surnamed Call, and the film was never looked up at all.
+
+| Scope | Endpoint | Means |
+|---|---|---|
+| `title` | `/search/{movie\|tv}` | the phrase **is** a title |
+| `person` | `/search/person` | the phrase **is** a name |
+| `discover` | `/discover/{movie\|tv}` | the phrase **describes** a kind of title |
+| `auto` | whichever the phrase looks like | |
+
+Title and Person are parsed offline by `js/search/intent.js` and never cost a model call. Auto and Genre & mood go to Gemini, because that is where a phrase genuinely has to be decomposed: *"best romantic films of bollywood"* becomes a language, a genre and a sort. The offline parser handles those too, less well, and is the fallback whenever Gemini is absent, rate limited or slow.
+
+Two functions in `intent.js` exist because of one specific bug. `titlePhrase` leaves a title's own words alone, because *the* is a stopword and the general parser was searching for *call*. `personPhrase` does strip filler, because under Person the filler genuinely is filler.
+
+Every Gemini response is validated against a fixed schema before use. Anything outside it is dropped, so a hallucinated key cannot reach the TMDB client, and a person returned under Genre & mood is discarded rather than honoured — the scope was the user's instruction, not a suggestion.
+
+### More than one name
+
+*"akshay kumar and suniel shetty movies"* means films they are **both** in, and there is exactly one way to ask TMDB that: `/discover/movie?with_cast=976,85034`. The comma is an AND and a pipe is an OR, so the comma is the whole feature — a pipe would answer "films with either of them", which is a different search wearing the same words.
+
+Each name is resolved on its own first, `/search/person` per name, in parallel. The People tab is tried before TMDB, as everywhere else, which fixes the spelling as a side effect: the sheet says *Suniel Shetty*, so typing *sunil shetty* resolves to the right id with nothing asked of TMDB or the model.
+
+**Two routes, and which one runs is not a preference.** Discover carries the genre, the era and the sort as server-side filters and costs one request, but it only exists for movies and it indexes billed cast only. The intersection of the credit lists covers the rest: every series co-star search, because `/discover/tv` has no people parameter at all, and any pairing where one side is crew rather than cast. An empty intersection is returned empty rather than falling back to the union — "films with both" and "films with either" are different questions, and quietly swapping one for the other is worse than saying there are none.
+
+**No vote floor is stacked on top of an AND.** *"best"* normally adds one, and on a co-star list — a handful of films — a 300-vote floor returns an empty page. The set is small enough to sort exactly in the browser, so it is.
+
+The offline parser splits names too, so this survives Gemini being absent. It is deliberately timid: every part has to survive the filler stripper **and** still hold at least two words, which is what stops *The Good, the Bad and the Ugly* being read as three actors. It is allowed to be wrong, because it only *proposes* names — each is then looked up strictly, and a part matching nobody is dropped rather than searched for, so a bad split costs a request and not a wrong page.
+
+**Person matching tolerates a typo of one or two letters.** This was the commonest way a real search failed and it was silent: *sunil shetty* is not a prefix, a suffix or a substring of *Suniel Shetty*, so every test scored it zero and the person was dropped. The bound is an **absolute** edit distance, not a ratio — two edits is a typo, four is a different word, and a ratio alone would let *the call* reach a person surnamed Call, which is the exact confusion the Search by control exists to prevent.
+
+### The correction ladder
+
+In `js/search/search.js`, and it runs only after TMDB has already come back empty:
+
+1. **TMDB as typed.** Its own search is fuzzy, so this usually ends it.
+2. **The People tab.** Free, offline, cannot be rate limited, and a name written down by hand is the one most likely to be wanted.
+3. **Gemini**, asked only "what did they mean to type".
+4. **A loose TMDB person search**, taking the closest thing available.
+
+Each rung costs more than the last and the loop stops at the first that finds something, so a name the sheet knows never reaches Gemini. Comparing names with spaces removed makes *shahrukh khan* an exact match for *Shah Rukh Khan*, which resolves at rung 2 for free. The ladder is lazy — `correctionCandidates` is a generator, so a caller that stops early never pays for the model call. In a multi-name search only the names that failed are corrected, and only if one did.
+
+When a correction happens the page says one thing: *"Showing results for Shah Rukh Khan"*. Not which rung found it, not what was typed instead, not how long it took or which parser read it. Those are facts about the machinery, and the only one that changes what the reader is looking at is the name.
+
+### Search bar autocomplete
+
+**Only the Person scope has it**, and it is local. `people.suggest()` matches against the People tab, which is already in memory from the same read that loads the rest of the sheet — so there is no request, no quota and no waiting. Same fuzzy matching as the correction ladder, so *sunil shetty* offers *Suniel Shetty*.
+
+Every other scope is a plain text field. A remote autocomplete lived here once, proxied through the bridge, and it was removed: it cost a round trip on every keystroke, carried a monthly quota that needed rotating keys to survive, and returned generic web queries rather than titles. Typing now never blocks on the network.
+
+### The coverage bar counts released titles only
+
+*"10 of 17 seen"* above a result set counts what has actually come out. An unreleased title cannot have been watched, so counting it only drags the share down by the number of films the person announced next — a search for an actor with three projects in production read *10 of 20* where the honest answer was *10 of 17*.
+
+The split is `releasedOnly()` in `js/ui/sections.js`, the **same** predicate the Movies and Upcoming sections are built from. It is exported rather than duplicated in the page: the count and the headings have to agree about what "released" means, and two copies of that rule would eventually disagree. An undated title with no votes and no rating counts as announced, not released, which is the same call the section split makes.
+
+---
+
+## The browse panel
+
+**Not a view over whatever the last search returned.** Picking Hindi and Romance runs a fresh discover query across the entire catalogue, so the filters are a way into the millions of titles TMDB holds rather than a sieve over the twenty on screen.
+
+Genre options carry the genre **name**, not its id. TMDB numbers genres differently for movies and TV (*Action* is 28, *Action & Adventure* is 10759), and names let a selection survive the Movies/Series toggle.
+
+**Load more asks for the next window, not the next page.** Each browse call fetches `BROWSE_PAGES` of TMDB at once — three pages, sixty titles — and the button used to advance the start page by one, so the second click re-requested two of the three pages it already had. Forty of every sixty titles were rows already on the grid, by construction. It looked like a sort problem rather than a paging one because it only showed on some filters: `revenue.desc` is a strictly ordered key with well-separated values, so the twenty genuinely new titles were obvious, while `popularity.desc` on a narrow filter has thousands of titles tied at the same tiny number and TMDB breaks those ties differently per request — so the same forty came back reshuffled and the whole page read as repeating itself.
+
+**The grid is de-duplicated on append as well.** `pack()` de-duplicates inside one response and cannot see what is already on screen, and TMDB genuinely repeats titles across pages whenever the sort has ties, so the window fix alone is not enough.
+
+**Load more appends; it does not repaint.** A full repaint threw away every poster the browser had already decoded and pushed the page under the reader. `growSections()` in `js/pages/search.js` compares card ids in order and appends only what is new, falling back to a full repaint whenever that would not be safe — a new section appearing, or a sort having reordered what is already up. The same applies to **Show more** on the library and watchlist. The button reports its own loading state rather than the page-level spinner, and a failed load leaves the grid alone.
+
+`MAX_BROWSE_PAGE` counts TMDB pages, not clicks, and it is a **stop rather than a clamp**. `Math.min()` against it meant that once the ceiling was reached every further click re-issued the identical request — the same sixty titles, forever, with the button still offered.
+
+**A sort on its own is a real query.** The panel counted genre, language, year and rating as filters and a sort as nothing, so *"Biggest box office"* with everything else untouched fell through to the trending feed — which looks exactly like the sort being ignored, because the same twenty titles come back. *Most popular* is still the exception: it is what discover does when asked for nothing, so it is the one sort that means no sort. Revenue is dropped from the list under Series, because a series has no box office and an option that silently means something else is worse than an option that is not there.
+
+**The drawer opens from the right**, the same side as the button that summons it. Reaching across the whole width to a panel arriving from the far edge reads as wrong every time.
+
+---
+
+## The library and the watchlist
+
+**Favourites and Must Watch are views, not pages.** They are flags on an All Watched row. Separate pages would mean the same title having three cards, and a heart ticked on one not updating the others. As views there is one card per title. The choice rides in the URL as `?view=favorite`, so a link is shareable and the back button works between views.
+
+**Each view states which collection it is.** A view that changes the grid but not the heading leaves you unsure what you are looking at, so the eyebrow, title and lead all come from the `VIEWS` table in `collection.js`.
+
+**The counts belong to the view, not the sheet.** Standing in Must watch and being told there are 1,013 titles and 54 favourites answers a question nobody asked, and made the view look like it had not filtered anything. Each view names itself in its first tile and cross-references the other flag: Must watch shows how many of its titles are also favourites, and the reverse.
+
+**The industry dropdown lists every industry**, from `watched.industries()`, not from `stats.categories`. That second one counts films only — it exists for the split by industry — so *Web Series* lived in a separate bucket and never reached the dropdown at all. The dropdown filters rows, and a series is a row.
+
+**The genre dropdown narrows to the industry chosen, and to the view.** Offering every genre in the sheet while standing in Bollywood is offering forty ways to empty the grid, because only four of them appear on a Bollywood row — and the counts beside each were the sheet's counts rather than the ones that filter would return. The list is rebuilt from the rows that survive the industry and the view, which is the same narrowing the mark-watched dialog does. Industry and genre are a sequence, not a pair: picking an industry rebuilds the genres and not the reverse, or the two would narrow each other into a corner. A genre that no longer exists under the new industry is cleared rather than left selected, because a filter naming something the list no longer offers is an empty grid for no visible reason.
+
+---
+
+## The navbar
+
+The bar is identical on every page, built from one list in `js/ui/nav.js`. Each page previously hand-wrote its own and they disagreed: the library had no Favourites link, so getting from Must watch to Favourites meant going back to the search page first.
+
+**Every entry stays visible everywhere, and the current one is marked rather than hidden.** An earlier version dropped the entry for the page you were on, which is tidy but wrong for a navbar: the row changed shape as you moved, and nothing told you where you had arrived.
+
+**There is no Search entry.** The wordmark is the way back to the search page, which is what a wordmark is for. The wordmark is first and left-aligned; browse is last at the far right, separated by a hairline because it opens a drawer rather than navigating.
+
+**Below 720px the four collections collapse into one dropdown.** The labels were already dropping at that width, leaving four unlabelled glyphs in a row that named nothing and left no margin for error on a 360px screen. The dropdown says which collection you are in and opens a menu of the rest, with reload and theme and then browse to its right — the same order as the wide layout. Both layouts are always in the DOM and CSS shows one; swapping them with a resize listener would mean re-binding on every breakpoint crossing for a few hundred bytes of markup.
+
+That menu is `position: fixed` and lives on `<body>`, for the same reason the card menu once did. Below 600px `.topbar__tools` carries `overflow-x: auto` as its own last resort, and an overflow container clips a dropdown inside it to nothing; `.topbar` also has `backdrop-filter`, which makes it the containing block for anything fixed inside it, so the menu has to leave the header entirely rather than merely be positioned against it. Both halves are asserted in `css.test.mjs`.
+
+**The reload button reports three times over.** It was bound on the search page only, so on the library and the watchlist it was a control that answered a click with nothing — and a control that answers with silence gets clicked again, which is how one intended reload became four. `wireRefresh` owns it on every page now: the icon spins while the read is in flight, settles to a tick for a moment afterwards, and the toast names what came back. It also refuses a second click while the first is running, so an impatient double tap cannot start two reads.
+
+---
+
+## Cards
+
+**One card height, everywhere.** A grid where every card is a different height reads as broken even when each one is fine on its own, because the eye cannot scan a row whose baselines move. Every text block is bounded to a known number of lines and `grid-auto-rows: 1fr` matches every row to its tallest card. The title, the facts line and the genre row scroll sideways rather than wrapping, with the scrollbar hidden and a short mask at the right edge hinting there is more — the overflow is a fallback, not a control. The overview clamps to three lines, two on a phone. The action bar is pushed down with `margin-top: auto`, so a short title means more whitespace above the bar rather than a shorter card.
+
+**Cards do not print the original title.** *"Colony / 群体"* on a card is two lines where one will do, and the second is not the line anyone is scanning for. The modal still shows it, which is where someone who wants it is looking.
+
+**There is no placeholder image anywhere.** A missing poster shows the **title** in its place — a generic film-reel graphic says nothing, while the title says exactly which film TMDB has no artwork for. This applies to cards, to the modal's poster and to the related-titles tiles.
+
+The pattern throughout: the fallback is rendered **behind** the image, and the `<img>` is only emitted when there is a URL. An image with an empty alt draws nothing when it fails, so the text underneath shows through with no error handler — which covers a dead URL as well as an absent one. Cast initials work the same way. The fallback comes first in the markup so the image covers it, and **the image must be positioned for that to hold**: a positioned element paints above a non-positioned one whatever the source order says, which is why the title was printed over every poster in the grid until `.card__poster img` got `position: absolute`. `css.test.mjs` now checks every fallback-behind-image pair.
+
+The bottom row of a card is where the TMDB rating and vote count used to sit. They are still on the detail modal, which has room for a vote count to mean something; on a card they were numbers nobody acted on, occupying the one place actions belong.
+
+That row has been through three shapes. Four icons on the poster competed with the art and named nothing. A three-dot menu named everything but cost two taps and, because `.card` and `.card__poster` are both `overflow: hidden`, had to render in a floating layer on `<body>` to avoid being clipped away. The row won because it does both jobs: each icon has a fixed position, filled when on, so **the fill is the state** and one tap changes it.
+
+**What appears follows what the sheet can record.** A watched title gets Favourite and Must watch on the left, because both are columns on an All Watched row and need the row to exist. An unwatched one gets Watchlist on the right, because watchlisting something already seen is a contradiction. The watched tick is always last on the right, in the same place on every card, so the eye learns one position. Tapping it on an unwatched title opens the industry-and-genre dialog; tapping a filled one removes the row.
+
+**Green means watched, and it has to mean it everywhere.** The filled tick had no rule of its own, so it inherited the action row's muted grey — the one state the whole app exists to show was the only control that did not announce itself. Gold means queued, on the bookmark, the poster ring and the corner tag.
+
+`cardactions.repaint()` rebuilds the bar and the badge as well as the trigger, or a heart filled from the card would not stay filled and queuing something would not raise its tag.
+
+The *"what my sheet calls it"* tip appears on hover on a pointer device, and a touch screen has no hover, so the (i) button carries it there — the whole feature was invisible on a phone before that. Tapping it again closes it, as does tapping anywhere else: a tip that can only be opened is a tip stuck open.
+
+---
+
+## The detail modal
+
+**The TMDB score sits in the facts line** beside the year and the runtime, not in a tile three sections down. It is the one number people read before deciding.
+
+Below that, *"The numbers"* is a fixed grid with the label above the value, and **every cell is always present**. A cell that vanishes when TMDB has no figure makes every title a different layout; an em dash says the same thing and holds the row. That matters most for box office, because a film that has not opened has none — the commonest case in anything upcoming — and `$0` would be a lie where `—` is merely absent.
+
+Trailer, IMDb, TMDB, Official site. On a phone the trailer takes the whole first row and the three links share the second, which is what the grid rule assumes — so `.btn-solid` has to stay the only solid button in that row, and it has to be first. Their icons are dropped below 600px: at that size the label is what matters and the icon is the first thing that can go.
+
+**Cast faces are circles cut from 2:3 headshots**, and `object-position` does more work here than anything else. Centring the crop puts the middle of a torso in the circle and slices the top of every head off, because TMDB frames profile shots head-and-shoulders with the face high up. **20% down is where faces actually are.** A cast member with no photo gets their initials, behind the photo by the same trick used everywhere else. One neutral treatment, not a colour per person — green and gold already mean watched and must-watch, and borrowing them for decoration would spend meaning that is already committed.
+
+**Back closes the modal.** It pushes one history entry on open and takes it back off however it closes, so the entry can never outlive the modal and strand a Back press on a page that looks unchanged. The URL is untouched — this is a state, not a location — and `show`/`hidden` are the hooks rather than `open()`, because a jump to a related title re-renders the same modal and must not stack a second entry. The library page's own `popstate` handler had to learn to ignore it: that handler repaints from `?view`, and our entry does not change `?view`, so Back was closing the modal **and** collapsing an expanded grid back to its first page.
+
+**The backdrop carries the blur, and it has to.** The dim was the only treatment there, and this page is full of glass — the topbar, the search box and the filter bar each run their own `backdrop-filter` — so the top of the page came out frosted while the grid below it stayed sharp under a flat black. Half blurred, half not, on every open. It sizes with `inset: 0` rather than Bootstrap's `100vw/100vh`: `100vw` counts the scrollbar and `100vh` is the *large* viewport on a phone, so both overshoot the visible area. The dim rides on the background alpha and the fade runs 0 to 1, because Bootstrap's 0.5 would halve the blur along with it.
+
+**The trailer's close button is on a bar above the frame, not on it.** Inside the frame it landed in the same corner as YouTube's own settings and fullscreen controls, and either could be hit by mistake.
+
+**How the trailer is put away depends on the device.** On a pointer device a click anywhere else in the modal closes it — the quickest gesture for the commonest intention. On touch it does **not**: a phone gets handled carelessly and a stray thumb would kill a video mid-scene, so there the explicit close button is the only way out. `window.matchMedia("(hover: none)")` is the signal, since a pointer can hover and a finger cannot. Closing empties the slot rather than hiding it, because hiding leaves the audio playing behind a closed panel.
+
+---
+
+## Feedback while writing
+
+An Apps Script write takes one to two seconds. The Flask version signalled this with `.card.is-saving { opacity: 0.62; pointer-events: none; }` — and fading something out and switching it off is the visual language of *broken*, so a working save read as a freeze. That was the single worst thing about using the app.
+
+What happens now, on every write:
+
+- The card repaints immediately and optimistically, so the click registers at once. The flags are snapshotted first and restored exactly if the write fails, because "undo the favourite" and "undo everything" look identical on screen but differ in the sheet.
+- The pressed button replaces its icon with a spinning ring, so the control reports its own state rather than relying on a strip elsewhere.
+- A toast appears with a spinner and the verb in progress — *"Adding to watched…"* — and the same toast becomes *"Added to watched — The Call"* or turns red with the reason it failed. It is returned to the caller as a handle so it settles in place rather than being replaced by a second one.
+- The card no longer fades and no longer stops accepting clicks: only the pressed button goes inert, so a second title can be added while the first is still saving.
+- The button is released by **re-finding** it after the write, not by reusing the reference, because `repaint()` replaces the element and the old handle is detached by then.
+
+**The verb stays the same through the flow.** The button that says Add produces a toast that says Added.
+
+---
+
+## Theme and the footer portrait
+
+Two themes, light and dark, toggled from the navbar and stored per device. Light is white cards on near-white paper. A pastel light scheme was tried and reverted — the argument was that white on near-white gives nothing a surface of its own, which is true and still did not look better, because the tint reads as a colour cast over accents chosen against white.
+
+**"ME" in the footer opens a photograph**, and which one depends on the theme: colour for light, black and white for dark. Not a filter — two different photographs, each taken to sit in the scheme it appears in. WebP, ~28KB against ~700KB for the JPEGs they came from, and neither is fetched until the word is clicked for the first time, so a portrait nobody opens costs nothing. It slides up from the bottom, which is the edge the trigger sits on. A `MutationObserver` watches `data-theme` rather than hooking the theme button, so the toggle keeps working with the sheet open and the theme button needs to know nothing about it.
+
+---
+
+## Speed
+
+**The sheet is snapshotted to localStorage and hydrated synchronously before the first paint.** This is the one that mattered most: a refresh used to paint the TMDB grid and then turn the watched cards green a second later, when the Apps Script read landed. Flags arriving after posters reads as the page correcting itself, which is worse than a slower page. The live read still runs in the background and replaces the snapshot; a page only repaints if the two actually disagree, because repainting an identical grid is a frame the user sees as a flicker. Every confirmed write updates the snapshot as well as memory, or a refresh would appear to undo it.
+
+**Both page controllers do that**, which they did not always. The search page had `changedFlags` from the beginning; the library and the watchlist called `paintFrom()` unconditionally when the read landed, and `paint()` replaces the whole grid. Every card was rebuilt two or three seconds into every visit, which reads as the page reloading itself — a snapshot that beats the read by two seconds buys nothing if the read then redraws the page anyway. `collection.js` compares a fingerprint of everything it draws: the ids, titles, years, industries, genres and the four flags. **Anything the page renders has to be in that string**, or a change to it will not reach the screen until the next visit.
+
+Other things that keep it quick:
+
+- **Reads and TMDB run in parallel.** The grid paints as soon as the feed lands, then repaints with the watched flags when the sheet arrives. A grid that paints early beats a blank page waiting for both.
+- **One bridge request for three tabs**, so a first load pays the Apps Script cold start once.
+- `js/core/cache.js` caches over memory and sessionStorage, so a second visit in the same session paints from cache immediately. **Empty result sets are deliberately not cached** — a title added to TMDB tomorrow should be findable tomorrow.
+- **Enrichment is capped.** Runtimes cost one call per title, so only the visible top of a list is enriched, four at a time.
+- Posters are lazy, decoding async. Fonts, TMDB and the image CDN are preconnected. The page controllers are modulepreloaded. No build step, so no bundle to download and nothing to invalidate.
+
+**State lives in each browser tab.** The Flask version ran one worker on Render because all state was in memory; now every tab is its own copy. Two devices will not see each other's writes until one of them reloads, which is the same trade made before, with the worker count no longer able to break it.
+
+---
+
+## Traps
+
+Things that have actually gone wrong here, and will again if the reason is forgotten.
+
+### CSS
+
+**Class names in the stylesheet are load-bearing.** `style.css` was written against specific names, so renaming a class in JS without renaming it in CSS produces an unstyled element rather than an error. It has happened: the detail modal was ported to `.detail__person` / `.detail__similar` / `.detail__stat` while the stylesheet still carried `.castcard` / `.similar-card` / `.factgrid`, and the old rules were then deleted as dead. Both halves have to move together, and `css.test.mjs` checks every class the JS emits against every class the CSS defines.
+
+**A base rule at the bottom outranks a phone rule above it.** New rules go at the bottom, media queries add no specificity, and the later rule wins at equal specificity at *every* width — so a base rule written at the bottom silently reverts the phone tuning it was never meant to touch. Anything added at the bottom that a phone block already sizes has to restate that block after itself. **Anything new goes at the bottom of `style.css`. Keep it there.**
+
+**Never bulk-edit this stylesheet with a script.** Three separate attempts to strip unreachable rules have corrupted it, each differently: swallowing the newline after a kept rule so `}` glued to the next selector; matching class names inside *comments* and deleting live rules; and treating the closing brace of an `@media` block as part of the next selector, so removing that rule removed the brace and every rule after it fell inside the media query. There is roughly 4KB of unreachable CSS in here, from the old poster icons, the three-dot menu and Flask-era markup. It costs one gzipped kilobyte and harms nothing. If it ever has to go, delete the rules by hand and run `css.test.mjs` after each one.
+
+**Centring twice centres nothing.** `.facets__caret` pulls itself up by half its height with a negative margin, and `.facets__wrap .facets__caret` then adds `translateY(-50%)` without clearing it, so every chevron in the browse drawer and the library toolbar sat half a caret above the middle of its control. Two rules, each correct alone, written years apart against the same element. It reads as "the dropdowns look a bit off" rather than as a bug, which is why it survived.
+
+**A bare `1fr` is not an equal column.** `repeat(4, 1fr)` is `repeat(4, minmax(auto, 1fr))`, and that auto minimum is the item's **min-content** width — the longest unbreakable word inside it. The cast grid was declared that way and a cast list is nothing but long unbreakable words: *Brahmanandam*, *Balasubramanian*, *Bhagavan*. A track holding one was floored at the width of that word and the rest shared what was left, so the four columns came back wildly uneven, and when the words together beat the container the whole grid overflowed the modal. The fix is `minmax(0, 1fr)`, and then `overflow-wrap` on the text, because with the floor gone a word wider than its track paints over its neighbour instead of pushing it out. `css.test.mjs` now fails on any `repeat(N, 1fr)` under `.detail__people` or `.detail__similars`.
+
+**Stacking contexts.** Two bugs, both from elements creating stacking contexts implicitly. `.searchbox` has `backdrop-filter`, so the autocomplete dropdown inside it could not escape and `.suggestions` (`mask-image`, also a stacking context) painted over it; fixed by ranking them, `.searchbox` at 30 and `.suggestions` at 1. Separately `.hero` and `.results` both sat at `z-index: 1` and the later one buried the dropdown; `.hero` is now 20.
+
+**A class that only exists in CSS is a control that does nothing.** The browse panel sits at `translateX(-100%)` and only `.panel.is-open` slides it in, so clearing `hidden` alone left it fully rendered just off screen — in the DOM, invisible, no error anywhere. `[hidden]` is `display: none` and a transition cannot run from `display: none`, so the class has to land on a later frame than the unhide, and on close the hide has to wait for the slide to finish. Any drawer added later needs the same three-part dance.
+
+**A navbar that does not fit becomes a horizontal scrollbar on the whole document**, and that looks like a dark band down the right of every page rather than a broken navbar. Below 600px the wordmark text is hidden (the mark stays as the way home, ~114px recovered, more than every other saving together), the buttons drop to 34px and then 32px below 380px, and `.topbar__tools` has its own `overflow-x` as a last resort so the *strip* scrolls rather than the page. `body` has `overflow-x: clip` as a final guard — clip rather than hidden, because hidden on body makes it a scroll container and the sticky topbar stops sticking. `css.test.mjs` checks all four parts.
+
+**iOS zooms the page whenever a focused control is under 16px, and never zooms back out.** Every typeable control is pinned to 16px on mobile, inputs and selects both, and phone controls are made smaller by **padding** rather than font-size. Where the text itself has to look smaller — the sort and Search by dropdowns — it is drawn with `transform: scale()` and the font-size stays declared at 16, because Safari reads the computed value and a transform does not change it. `css.test.mjs` asserts that any scaled input or select still declares 16px, so the trick cannot be tidied into the thing it exists to avoid.
+
+**The status buttons and the sort dropdown share one height, from one token.** They never did: the segmented control is a padded box around padded buttons (~43px) while the select was padded once (~37px), so they sat six pixels apart at every width. Where the select is scaled, its height is set *pre*-scale and divided by the scale it is drawn at, so what lands on screen is the shared height, and the extra layout height is given back with a negative margin. `css.test.mjs` checks that arithmetic, because being six pixels out is not something reading a diff would catch.
+
+### JavaScript
+
+**A native option list cannot be styled.** The *closed* control was always ours — border, padding, caret, the lot — and the *open* one never was: the browser draws that popup, and padding on `<option>` is honoured by Firefox, ignored by Chrome and ignored harder by Safari. So the items sat hard against the left edge with no rule anywhere that could move them. `js/ui/picker.js` suppresses the popup on pointer devices and draws the list instead.
+
+The `<select>` stays. It is still the state, still carries the label, the value, the change event and the 16px, so nothing that reads or writes `.value` knows this happened. `preventDefault` on `mousedown` is the only thing that reliably stops a browser drawing its own popup. The listeners are delegated from `document`, so a rebuilt browse drawer or a dialog opened later needs no re-wiring.
+
+Touch is left alone deliberately. A finger cannot hover, `matchMedia("(hover: none)")` is the same signal the trailer uses, and the platform picker on a phone — a wheel on iOS, a dialog on Android — is better than anything built here and is what people expect.
+
+The menu is `position: fixed` on `<body>` for the reason the nav menu is: `.panel__body` scrolls and would clip it, `.topbar` has a `backdrop-filter` and would trap it. It ranks above the modal, or the mark-watched dialog's own two selects would open behind it.
+
+Arrow keys stop at the ends rather than wrapping, because a native select does and because wrapping from the last option round to *All genres* clears the filter on one extra keypress. The pointer moves that **same** highlight rather than getting a `:hover` rule of its own, or two rows would be lit at once.
+
+**`body` carries a CSS `zoom` above 1024px, and that breaks anything positioned from a measured rect.** `--ui-scale` is `0.7`. A `position: fixed` element inside `<body>` reads its own `px` in that scaled space, while `getBoundingClientRect()` reports real viewport pixels — so a menu placed at the rect's `left` lands at `left × 0.7`, a third of the way across the page. `pageScale()` in `js/core/util.js` returns the accumulated zoom and every measurement crosses through it once. Anything new that positions itself from a rect has to do the same.
+
+**`stopPropagation` does not stop sibling listeners.** The card controls call it, but the card handler is bound to the same container and registered first, so the modal still opened. Fixed with an explicit guard in `js/ui/detail.js`, applied on both click and keydown: `const IN_CARD = ".cardact, .cardmenu, .card__note"`. **If you add another in-card control, add it to that one constant.**
+
+**Bootstrap modals trap focus.** With the detail modal open behind one of our dialogs, the password field could be clicked but not typed into. `closeAnyModal` in `js/ui/actions.js` runs before every dialog, and focus is set after the hide transition (220ms), not during it.
+
+### Apps Script
+
+**It serves the last deployed version, not the last saved one.** Editing the bridge and pressing save changes nothing the site can see: **Deploy → Manage deployments → pencil → New version → Deploy.** Creating a *new* deployment gives a new URL and breaks `APPS_SCRIPT_URL`.
+
+**It cannot answer a CORS preflight.** Writes go out as `Content-Type: text/plain`, the one JSON carrier that never triggers one, and `doPost` parses the body itself. **Changing that header to `application/json` will break every write.**
+
+**ES modules will not load over `file://`.** Serve the folder, even locally.
+
+---
+
+## Tests
+
+Nine suites in `assets/tests/`. Seven run with plain node and need nothing installed; `flow.test.mjs` and `modal.test.mjs` want jsdom and skip cleanly without it. **134 assertions without jsdom, 157 with.**
+
+| Suite | Covers |
+|---|---|
+| `logic` | Search parsing across all four scopes, title-versus-person, decade and language extraction, the section split, the browse panel's idea of an active filter, and that Load more asks for pages it does not already have |
+| `data` | Column mapping with the spacer present, a renamed header, a header named twice and Type beside Industry, id-not-title matching, re-watch de-duplication and what the de-duplicator reports, no memory drift on a failed write, one call for mark-watched, flag independence, the gate |
+| `watchlist` | Identity: one film, one row, everywhere |
+| `people` | Co-star searches, and the calls they make |
+| `nav` | Which entry is marked on each page, and the phone dropdown |
+| `cardbar` | Every shape the card action bar can take |
+| `css` | The stylesheet itself |
+| `flow` | A real page in a real DOM *(needs jsdom)* |
+| `modal` | The detail modal, rendered *(needs jsdom)* |
+
+`watchlist.test.mjs` is built on a slice of the real sheet, because the bug it guards only shows up on real data: the two *Ved* rows, the run of low ids that collide with TV ids, and the blank-Industry rows the site writes itself.
+
+`people.test.mjs` asserts the **requests** rather than the results, because the whole feature is which endpoint is called with which parameters. A test that only checked the titles would pass just as happily on a call that fetched one actor and ignored the other.
+
+`css.test.mjs` is the odd one out and the most useful, because the bugs that have actually shipped here are all silent. It asserts that every top-level region outranks `.wash`, that every class the code emits has a rule somewhere, that no block is left unclosed, that no typeable control drops under 16px in a phone media query, that an image covering a fallback is positioned itself, that no fixed-count grid of text uses a track with an auto minimum, and that the nav dropdown cannot be clipped by the strip it sits in. It found a real 14px select the moment it was written, and the uneven cast grid the moment that assertion was added.
+
+**Every assertion added here was checked by putting the bug back.** Four of the five reverts failed the suite immediately; the fifth passed, which was the useful one — re-aliasing `type` to industry changes nothing on its own, because the type field is declared first and claims the column before industry is reached. The real revert is removing the field, and that fails three assertions. **An assertion that cannot fail is decoration.**
+
+`modal.test.mjs` earned its place immediately: it caught `prettyDate` being called in `detail.js` while only being defined in `cards.js`. `node --check` does not see an undefined identifier, and neither does reading the diff — the modal simply showed *"Could not load that title"* for every film. Anything that renders from a payload is worth a test that actually renders it.
+
+**Layout is still the gap.** jsdom is a real DOM but has no layout engine, so it can confirm structure and never geometry. The dropdown placement work was verified in headless Chromium instead, which is the only way that class of bug gets caught. If something looks wrong visually, that is the likeliest source, not the logic.
+
+---
+
+## Outstanding
+
+- There is no `apple-touch-icon`. Adding the site to an iOS home screen gives a screenshot rather than an icon. A small PNG and one `<link>` per page brings it back.
+- Every key in `js/config.js` is public by design. [SETUP.md](SETUP.md#about-the-keys) says what each one exposes and how to close the write token if that changes.
+- Old per-industry tabs may still exist in the workbook, unused. Safe to delete.
+- The gviz fallback in `js/data/sheets.js` is about forty lines earning their place only if the site might run before the Apps Script is deployed. Once the bridge is up and stable it can go.
+
+---
+
+## Ideas discussed, not built
+
+Franchise completion, since the `FR - ` genre tags are already franchise markers and TMDB's collection endpoint would show which entries are missing. URL state for search. Library sort persisted per device. Streaming availability via `/watch/providers`. A service worker, which on a static site would be a real offline mode rather than just a cache.
+
+For autocomplete specifically: TMDB's `/search/multi` as a title suggester outside the Person scope. It is already integrated, free, has no quota, and returns actual titles rather than generic web queries — which for a film site is the version worth having if suggestions are ever wanted back.
+
+---
+
+## Working style that suited this project
+
+**Comments explain why, not what** — especially where the code looks wrong until you know the reason: Google-before-memory, id-not-title matching, the z-index rankings, the `text/plain` content type, the zoom conversion in `place()`. Those earned their place. Essay-length blocks did not.
+
+**Verify before claiming.** Every round ended with a script that actually exercised the change. Several bugs were caught that way and would otherwise have shipped.

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fishpot Stories</title>
+    <link rel="icon" type="image/png"
+        href="https://cdn.iconscout.com/icon/premium/png-256-thumb/fish-pot-icon-svg-download-png-6067410.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="image" href="assets/hero.jpg" fetchpriority="high">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/home.css">
+</head>
+
+<body class="home-page">
+    <header class="site-header">
+        <a href="index.html" class="brand">
+            <span class="brand-icon">📖</span>
+            Fishpot Stories
+        </a>
+        <nav class="site-nav">
+            <a href="index.html" class="active">Home</a>
+            <a href="add-story.html">Add Story</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-inner">
+                <div class="hero-text">
+                    <span class="hero-badge">Fishpot Stories</span>
+                    <p class="kicker">Hum sabke dwara chalne wala blog</p>
+                    <h1>Yahan apni kahani share karo aur humein bhi hasne ka mauka do.</h1>
+                    <p class="lead">
+                        Duniya bhar (fishpot) ke logon ke dil se jude anubhav padho, ya apni kahani kuch hi
+                        minute mein publish karo.
+                    </p>
+                    <p class="lead lead--accent">
+                        Agar aapke paas koi kahani hai toh humare saath share karo — har awaaz yahan suni jaati hai.
+                    </p>
+                    <ul class="hero-highlights" aria-label="Highlights">
+                        <li>Padho dil se likhi hui kahaniyan</li>
+                        <li>Publish karo minutes mein</li>
+                        <li>Community se judo aur inspire karo</li>
+                    </ul>
+                    <div class="hero-actions">
+                        <a class="btn primary" href="add-story.html">Share your story</a>
+                        <a class="btn ghost hero-btn-secondary" href="#stories">Explore stories</a>
+                    </div>
+                </div>
+                <div class="hero-card">
+                    <p class="hero-card__kicker">Live Counter</p>
+                    <p class="hero-card__big" id="story-count">0+</p>
+                    <p class="hero-card__note">stories published</p>
+                    <p class="hero-card__hint">Jaldi se padho.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="stories" class="stories-section">
+            <div class="section-heading">
+                <div>
+                    <p class="kicker">Latest</p>
+                    <h2>Fresh stories just in</h2>
+                </div>
+                <a class="link-cta" href="add-story.html">Publish yours →</a>
+            </div>
+            <div id="stories-container" class="stories-grid">
+                <div class="loading-panel">
+                    <div class="spinner"></div>
+                    <p>Loading stories...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>
+            Banaya hai bade dil se. Any issues? Contact 👉 •
+            <a href="#" id="contact-link" data-video="assets/kya_re_bhikmangya.mp4">
+                Contact admin
+            </a>
+        </p>
+    </footer>
+
+    <template id="story-card-template">
+        <article class="story-card">
+            <div class="story-image-wrap">
+                <div class="story-image fallback"></div>
+            </div>
+            <div class="story-content">
+                <p class="story-meta"></p>
+                <h3></h3>
+                <p class="story-description"></p>
+                <div class="story-actions">
+                    <a class="link-btn read-more">Read full story →</a>
+                </div>
+            </div>
+        </article>
+    </template>
+
+    <div id="contact-popup" class="contact-popup" aria-hidden="true">
+        <div class="contact-popup__backdrop"></div>
+        <div class="contact-popup__dialog" role="dialog" aria-modal="true" aria-labelledby="contact-popup-title">
+            <button type="button" id="contact-popup-close" class="contact-popup__close"
+                aria-label="Close contact popup">&times;</button>
+            <h2 id="contact-popup-title" class="sr-only">Contact</h2>
+            <video id="contact-popup-video" class="contact-popup__video" playsinline controls preload="none"></video>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/sheets.js"></script>
+    <script src="js/base.js"></script>
+    <script defer src="js/home.js"></script>
+</body>
+
+</html>

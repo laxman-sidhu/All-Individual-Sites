@@ -1,0 +1,53 @@
+// Every credential and constant. Rotate anything here and the whole app follows.
+
+export const TMDB_API_KEY = "f937245c9deb3cb82511d04b777e096f";
+
+// Optional. Without it the offline parser handles every search.
+export const GEMINI_API_KEY = "AQ.Ab8RN6KguL0XdOCrMtJcCQP04IfWIpxtcT6lifaX5nkqoxnNPA";
+export const GEMINI_MODEL = "gemini-2.0-flash";
+
+// The Apps Script web app deployed from inside the workbook: it reads the tabs and writes to them. See assets/docs/SETUP.md.
+export const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5--x2f-OHO4jwZRrFXxXBm9YNFg8e8YCJkh9qiz0-tmZAEXrvH7NSBd6Rzon0KOhw/exec";
+
+// Must match SECRET inside SidCinema_Bridge.gs exactly. Change both together.
+export const APPS_SCRIPT_TOKEN = "THIS-IS-A-LONG-RANDOM-STRING-FOR-APPS-SCRIPT-TOKEN";
+
+// The /d/<this>/edit part of the spreadsheet URL. Only used by the gviz fallback reader.
+export const SHEET_ID = "1UhTK_0IqotZila6-SFMVYtmP863qcWAt4Jk1JBj3ETs";
+
+export const WATCHED_GID = "0";
+export const WATCHLIST_GID = "549028903";
+export const PEOPLE_GID = "1194380540";
+
+// The Watchlist Type value and the All Watched Industry value that both mean series.
+export const SERIES_INDUSTRY = "Web Series";
+export const MOVIE_INDUSTRY = "Movie";
+
+// Written into Must Watch and Favorites when ticked.
+export const FLAG_YES = "Yes";
+
+// Typed once per device. Checked in the browser only, so it gates the buttons, not the sheet.
+export const OWNER_PASSWORD = "LaxSid@12345";
+export const OWNER_NAME = "Laxman";
+export const SESSION_DAYS = 90;
+
+// How long a TMDB response stays cached in this tab.
+export const TMDB_TTL_MS = 6 * 60 * 60 * 1000;
+
+export const TMDB_BASE = "https://api.themoviedb.org/3";
+export const IMAGE_BASE = "https://image.tmdb.org/t/p";
+export const POSTER_SIZE = "w500";
+export const BACKDROP_SIZE = "w1280";
+export const PROFILE_SIZE = "w185";
+
+// Pages of TMDB results fetched per request, and the browse ceiling.
+export const PAGES_PER_REQUEST = 2;
+export const BROWSE_PAGES = 3;
+// The highest TMDB page a browse window may START at. Counts TMDB pages, not clicks.
+export const MAX_BROWSE_PAGE = 25;
+export const TMDB_PAGE_SIZE = 20;
+
+// Runtimes and certifications cost one call per title, so cap the enrichment.
+export const ENRICH_LIMIT = 18;
+
+export const MAX_QUERY_LENGTH = 160;
